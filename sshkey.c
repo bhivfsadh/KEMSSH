@@ -92,6 +92,8 @@ extern const struct sshkey_impl sshkey_ed25519_impl;
 extern const struct sshkey_impl sshkey_ed25519_cert_impl;
 extern const struct sshkey_impl sshkey_ed25519_sk_impl;
 extern const struct sshkey_impl sshkey_ed25519_sk_cert_impl;
+extern const struct sshkey_impl sshkey_ed25519_mldsa65_impl;
+extern const struct sshkey_impl sshkey_ed25519_slhdsapuresha2192f_impl;
 #ifdef WITH_OPENSSL
 # ifdef OPENSSL_HAS_ECC
 #  ifdef ENABLE_SK
@@ -120,6 +122,7 @@ extern const struct sshkey_impl sshkey_rsa_sha512_cert_impl;
 extern const struct sshkey_impl sshkey_falcon512_impl;
 extern const struct sshkey_impl sshkey_falcon1024_impl;
 extern const struct sshkey_impl sshkey_slhdsapuresha2128f_impl;
+extern const struct sshkey_impl sshkey_slhdsapuresha2192f_impl;
 extern const struct sshkey_impl sshkey_slhdsapuresha2256f_impl;
 extern const struct sshkey_impl sshkey_mldsa44_impl;
 extern const struct sshkey_impl sshkey_mldsa65_impl;
@@ -137,6 +140,7 @@ extern const struct sshkey_impl sshkey_rsa3072_mayo2_impl;
 extern const struct sshkey_impl sshkey_ecdsanistp256_falcon512_impl;
 extern const struct sshkey_impl sshkey_ecdsanistp521_falcon1024_impl;
 extern const struct sshkey_impl sshkey_ecdsanistp256_slhdsapuresha2128f_impl;
+extern const struct sshkey_impl sshkey_ecdsanistp384_slhdsapuresha2192f_impl;
 extern const struct sshkey_impl sshkey_ecdsanistp521_slhdsapuresha2256f_impl;
 extern const struct sshkey_impl sshkey_ecdsanistp256_mldsa44_impl;
 extern const struct sshkey_impl sshkey_ecdsanistp384_mldsa65_impl;
@@ -151,6 +155,8 @@ extern const struct sshkey_impl sshkey_ecdsanistp521_mayo5_impl;
 const struct sshkey_impl * const keyimpls[] = {
 	&sshkey_ed25519_impl,
 	&sshkey_ed25519_cert_impl,
+	&sshkey_ed25519_mldsa65_impl,
+	&sshkey_ed25519_slhdsapuresha2192f_impl,
 #ifdef ENABLE_SK
 	&sshkey_ed25519_sk_impl,
 	&sshkey_ed25519_sk_cert_impl,
@@ -182,6 +188,7 @@ const struct sshkey_impl * const keyimpls[] = {
 	&sshkey_falcon512_impl,
 	&sshkey_falcon1024_impl,
 	&sshkey_slhdsapuresha2128f_impl,
+	&sshkey_slhdsapuresha2192f_impl,
 	&sshkey_slhdsapuresha2256f_impl,
 	&sshkey_mldsa44_impl,
 	&sshkey_mldsa65_impl,
@@ -198,6 +205,7 @@ const struct sshkey_impl * const keyimpls[] = {
 	&sshkey_ecdsanistp256_falcon512_impl,
 	&sshkey_ecdsanistp521_falcon1024_impl,
 	&sshkey_ecdsanistp256_slhdsapuresha2128f_impl,
+	&sshkey_ecdsanistp384_slhdsapuresha2192f_impl,
 	&sshkey_ecdsanistp521_slhdsapuresha2256f_impl,
 	&sshkey_ecdsanistp256_mldsa44_impl,
 	&sshkey_ecdsanistp384_mldsa65_impl,

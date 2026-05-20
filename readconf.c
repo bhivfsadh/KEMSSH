@@ -58,6 +58,7 @@
 #include "sshkey.h"
 #include "misc.h"
 #include "readconf.h"
+#include "ssh-kem.h"
 #include "match.h"
 #include "kex.h"
 #include "mac.h"
@@ -152,7 +153,8 @@ typedef enum {
 	oBatchMode, oCheckHostIP, oStrictHostKeyChecking, oCompression,
 	oTCPKeepAlive, oNumberOfPasswordPrompts,
 	oLogFacility, oLogLevel, oLogVerbose, oCiphers, oMacs,
-	oPubkeyAuthentication,
+	oPubkeyAuthentication, oKEMAuthentication, oKEMAuthAlgorithms,
+	oIdentityKEMFile,
 	oKbdInteractiveAuthentication, oKbdInteractiveDevices, oHostKeyAlias,
 	oDynamicForward, oPreferredAuthentications, oHostbasedAuthentication,
 	oHostKeyAlgorithms, oBindAddress, oBindInterface, oPKCS11Provider,
@@ -233,6 +235,9 @@ static struct {
 	{ "skeyauthentication", oKbdInteractiveAuthentication }, /* alias */
 	{ "tisauthentication", oKbdInteractiveAuthentication },  /* alias */
 	{ "pubkeyauthentication", oPubkeyAuthentication },
+	{ "kemauthentication", oKEMAuthentication },
+	{ "kemauthalgorithms", oKEMAuthAlgorithms },
+	{ "identitykemfile", oIdentityKEMFile },
 	{ "dsaauthentication", oPubkeyAuthentication },		    /* alias */
 	{ "hostbasedauthentication", oHostbasedAuthentication },
 	{ "identityfile", oIdentityFile },
@@ -1318,6 +1323,10 @@ parse_time:
 		intptr = &options->pubkey_authentication;
 		goto parse_multistate;
 
+	case oKEMAuthentication:
+		intptr = &options->kem_authentication;
+		goto parse_flag;
+
 	case oHostbasedAuthentication:
 		intptr = &options->hostbased_authentication;
 		goto parse_flag;
@@ -1418,6 +1427,10 @@ parse_time:
 		}
 		break;
 
+	case oIdentityKEMFile:
+		charptr = &options->identity_kem_file;
+		goto parse_string;
+
 	case oCertificateFile:
 		arg = argv_next(&ac, &av);
 		if (!arg || *arg == '\0') {
@@ -1512,6 +1525,23 @@ parse_char_array:
 	case oPreferredAuthentications:
 		charptr = &options->preferred_authentications;
 		goto parse_string;
+
+	case oKEMAuthAlgorithms:
+		charptr = &options->kem_auth_algorithms;
+		arg = argv_next(&ac, &av);
+		if (!arg || *arg == '\0') {
+			error("%.200s line %d: Missing argument.", filename,
+			    linenum);
+			goto out;
+		}
+		if (!ssh_kem_names_valid(arg)) {
+			error("%.200s line %d: Bad KEM auth algorithms '%s'.",
+			    filename, linenum, arg);
+			goto out;
+		}
+		if (*activep && *charptr == NULL)
+			*charptr = xstrdup(arg);
+		break;
 
 	case oBindAddress:
 		charptr = &options->bind_address;
@@ -2697,6 +2727,7 @@ initialize_options(Options * options)
 	options->fwd_opts.streamlocal_bind_mask = (mode_t)-1;
 	options->fwd_opts.streamlocal_bind_unlink = -1;
 	options->pubkey_authentication = -1;
+	options->kem_authentication = -1;
 	options->gss_authentication = -1;
 	options->gss_deleg_creds = -1;
 	options->password_authentication = -1;
@@ -2718,8 +2749,10 @@ initialize_options(Options * options)
 	options->kex_algorithms = NULL;
 	options->hostkeyalgorithms = NULL;
 	options->ca_sign_algorithms = NULL;
+	options->kem_auth_algorithms = NULL;
 	options->num_identity_files = 0;
 	memset(options->identity_keys, 0, sizeof(options->identity_keys));
+	options->identity_kem_file = NULL;
 	options->num_certificate_files = 0;
 	memset(options->certificates, 0, sizeof(options->certificates));
 	options->hostname = NULL;
@@ -2861,6 +2894,8 @@ fill_default_options(Options * options)
 		options->fwd_opts.streamlocal_bind_unlink = 0;
 	if (options->pubkey_authentication == -1)
 		options->pubkey_authentication = SSH_PUBKEY_AUTH_ALL;
+	if (options->kem_authentication == -1)
+		options->kem_authentication = 0;
 	if (options->gss_authentication == -1)
 		options->gss_authentication = 0;
 	if (options->gss_deleg_creds == -1)
@@ -2936,6 +2971,10 @@ fill_default_options(Options * options)
 #endif /* WITH_OPENSSL */
 ///// OQS_TEMPLATE_FRAGMENT_ADD_ID_FILES_END
 	}
+	if (options->identity_kem_file == NULL)
+		options->identity_kem_file = xstrdup(_PATH_SSH_CLIENT_ID_MLKEM768);
+	if (options->kem_auth_algorithms == NULL)
+		options->kem_auth_algorithms = xstrdup(SSH_KEM_DEFAULT_ALG);
 	if (options->escape_char == -1)
 		options->escape_char = '~';
 	if (options->num_system_hostfiles == 0) {
@@ -3162,6 +3201,7 @@ free_options(Options *o)
 	FREE_ARRAY(u_int, o->num_system_hostfiles, o->system_hostfiles);
 	FREE_ARRAY(u_int, o->num_user_hostfiles, o->user_hostfiles);
 	free(o->preferred_authentications);
+	free(o->kem_auth_algorithms);
 	free(o->bind_address);
 	free(o->bind_interface);
 	free(o->pkcs11_provider);
@@ -3170,6 +3210,7 @@ free_options(Options *o)
 		free(o->identity_files[i]);
 		sshkey_free(o->identity_keys[i]);
 	}
+	free(o->identity_kem_file);
 	for (i = 0; i < o->num_certificate_files; i++) {
 		free(o->certificate_files[i]);
 		sshkey_free(o->certificates[i]);
@@ -3780,6 +3821,7 @@ dump_client_config(Options *o, const char *host)
 #endif
 	dump_cfg_string(oSecurityKeyProvider, o->sk_provider);
 	dump_cfg_string(oPreferredAuthentications, o->preferred_authentications);
+	dump_cfg_string(oKEMAuthAlgorithms, o->kem_auth_algorithms);
 	dump_cfg_string(oPubkeyAcceptedAlgorithms, o->pubkey_accepted_algos);
 	dump_cfg_string(oRevokedHostKeys, o->revoked_host_keys);
 	dump_cfg_string(oXAuthLocation, o->xauth_location);
@@ -3794,6 +3836,7 @@ dump_client_config(Options *o, const char *host)
 
 	/* String array options */
 	dump_cfg_strarray(oIdentityFile, o->num_identity_files, o->identity_files);
+	dump_cfg_string(oIdentityKEMFile, o->identity_kem_file);
 	dump_cfg_strarray_oneline(oCanonicalDomains, o->num_canonical_domains, o->canonical_domains);
 	dump_cfg_strarray(oCertificateFile, o->num_certificate_files, o->certificate_files);
 	dump_cfg_strarray_oneline(oGlobalKnownHostsFile, o->num_system_hostfiles, o->system_hostfiles);

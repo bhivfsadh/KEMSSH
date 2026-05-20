@@ -25,6 +25,8 @@ int oqs_utils_is_ecdsa_hybrid(int keytype) {
             return 1;
         case KEY_ECDSA_NISTP256_SLH_DSA_PURE_SHA2_128F:
             return 1;
+        case KEY_ECDSA_NISTP384_SLH_DSA_PURE_SHA2_192F:
+            return 1;
         case KEY_ECDSA_NISTP521_SLH_DSA_PURE_SHA2_256F:
             return 1;
         case KEY_ECDSA_NISTP256_ML_DSA_44:
@@ -44,6 +46,18 @@ int oqs_utils_is_ecdsa_hybrid(int keytype) {
     return 0;
 }
 
+int oqs_utils_is_ed25519_hybrid(int keytype) {
+    switch(keytype) {
+        case KEY_ED25519_ML_DSA_65:
+            return 1;
+        case KEY_ED25519_SLH_DSA_PURE_SHA2_192F:
+            return 1;
+    }
+    return 0;
+}
+
 int oqs_utils_is_hybrid(int keytype) {
-    return oqs_utils_is_rsa_hybrid(keytype) || oqs_utils_is_ecdsa_hybrid(keytype);
+    return oqs_utils_is_rsa_hybrid(keytype) ||
+        oqs_utils_is_ecdsa_hybrid(keytype) ||
+        oqs_utils_is_ed25519_hybrid(keytype);
 }

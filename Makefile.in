@@ -103,7 +103,7 @@ LIBSSH_OBJS=${LIBOPENSSH_OBJS} \
 	msg.o dns.o entropy.o gss-genr.o umac.o umac128.o \
 	smult_curve25519_ref.o \
 	poly1305.o chacha.o cipher-chachapoly.o cipher-chachapoly-libcrypto.o \
-	ssh-ed25519.o digest-openssl.o digest-libc.o \
+	ssh-ed25519.o digest-openssl.o digest-libc.o ssh-kem.o \
 	hmac.o ed25519.o hash.o \
 	kex.o kex-names.o kexdh.o kexgex.o kexecdh.o kexc25519.o \
 	kexgexc.o kexgexs.o \
@@ -129,7 +129,7 @@ SSHD_SESSION_OBJS=sshd-session.o auth-rhosts.o auth-passwd.o \
 	audit.o audit-bsm.o audit-linux.o platform.o \
 	sshpty.o sshlogin.o servconf.o serverloop.o \
 	auth.o auth2.o auth2-methods.o auth-options.o session.o \
-	auth2-chall.o groupaccess.o \
+	auth2-chall.o auth2-kem.o groupaccess.o \
 	auth-bsdauth.o auth2-hostbased.o auth2-kbdint.o \
 	auth2-none.o auth2-passwd.o auth2-pubkey.o auth2-pubkeyfile.o \
 	monitor.o monitor_wrap.o auth-krb5.o \
@@ -142,6 +142,7 @@ SSHD_AUTH_OBJS=sshd-auth.o \
 	auth2-methods.o \
 	auth-rhosts.o auth-passwd.o sshpty.o sshlogin.o servconf.o \
 	serverloop.o auth.o auth2.o auth-options.o session.o auth2-chall.o \
+	auth2-kem.o \
 	groupaccess.o auth-bsdauth.o auth2-hostbased.o auth2-kbdint.o \
 	auth2-none.o auth2-passwd.o auth2-pubkey.o auth2-pubkeyfile.o \
 	auth2-gss.o gss-serv.o gss-serv-krb5.o \

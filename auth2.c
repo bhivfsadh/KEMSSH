@@ -49,6 +49,7 @@
 #include "sshkey.h"
 #include "hostfile.h"
 #include "auth.h"
+#include "auth2-kem.h"
 #include "dispatch.h"
 #include "pathnames.h"
 #include "ssherr.h"
@@ -66,7 +67,10 @@ extern struct sshbuf *loginmsg;
 /* methods */
 
 extern Authmethod method_none;
+extern Authmethod method_kem;
+extern Authmethod method_kem_and;
 extern Authmethod method_pubkey;
+extern Authmethod method_pubkey_hybrid_and;
 extern Authmethod method_passwd;
 extern Authmethod method_kbdint;
 extern Authmethod method_hostbased;
@@ -76,7 +80,10 @@ extern Authmethod method_gssapi;
 
 Authmethod *authmethods[] = {
 	&method_none,
+	&method_kem,
+	&method_kem_and,
 	&method_pubkey,
+	&method_pubkey_hybrid_and,
 #ifdef GSSAPI
 	&method_gssapi,
 #endif
@@ -328,6 +335,7 @@ input_userauth_request(int type, u_int32_t seq, struct ssh *ssh)
 	}
 	/* reset state */
 	auth2_challenge_stop(ssh);
+	auth2_kem_stop(ssh);
 
 #ifdef GSSAPI
 	/* XXX move to auth2_gssapi_stop() */
@@ -377,7 +385,10 @@ userauth_finish(struct ssh *ssh, int authenticated, const char *packet_method,
 		/* prefer primary authmethod name to possible synonym */
 		if ((m = authmethod_byname(method)) == NULL)
 			fatal("INTERNAL ERROR: bad method %s", method);
-		method = m->cfg->name;
+		if (strcmp(packet_method, "publickey-hybrid-and") == 0)
+			method = packet_method;
+		else
+			method = m->cfg->name;
 	}
 
 	/* Special handling for root */
@@ -666,8 +677,12 @@ auth2_update_methods_lists(Authctxt *authctxt, const char *method,
 	debug3_f("updating methods list after \"%s\"", method);
 	for (i = 0; i < authctxt->num_auth_methods; i++) {
 		if (!remove_method(&(authctxt->auth_methods[i]), method,
-		    submethod))
-			continue;
+		    submethod)) {
+			if (!(strcmp(method, "publickey") == 0 &&
+			    remove_method(&(authctxt->auth_methods[i]),
+			    "publickey-hybrid-and", submethod)))
+				continue;
+		}
 		found = 1;
 		if (*authctxt->auth_methods[i] == '\0') {
 			debug2("authentication methods list %d complete", i);

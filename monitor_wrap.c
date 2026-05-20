@@ -492,6 +492,74 @@ mm_auth_password(struct ssh *ssh, char *password)
 }
 
 int
+mm_auth_kem_init(const char *method, const char *alg,
+    const u_char *public_key, size_t public_key_len,
+	u_char **ciphertext, size_t *ciphertext_len)
+{
+	struct sshbuf *m;
+	u_int ok = 0;
+	int r;
+
+	if (ciphertext != NULL)
+		*ciphertext = NULL;
+	if (ciphertext_len != NULL)
+		*ciphertext_len = 0;
+	if (method == NULL || alg == NULL || public_key == NULL ||
+	    ciphertext == NULL ||
+	    ciphertext_len == NULL)
+		return SSH_ERR_INVALID_ARGUMENT;
+
+	if ((m = sshbuf_new()) == NULL)
+		fatal_f("sshbuf_new failed");
+	if ((r = sshbuf_put_cstring(m, method)) != 0 ||
+	    (r = sshbuf_put_cstring(m, alg)) != 0 ||
+	    (r = sshbuf_put_string(m, public_key, public_key_len)) != 0)
+		fatal_fr(r, "assemble");
+
+	mm_request_send(pmonitor->m_recvfd, MONITOR_REQ_KEM_INIT, m);
+	mm_request_receive_expect(pmonitor->m_recvfd, MONITOR_ANS_KEM_INIT, m);
+
+	if ((r = sshbuf_get_u32(m, &ok)) != 0)
+		fatal_fr(r, "parse");
+	if (ok != 0 &&
+	    (r = sshbuf_get_string(m, ciphertext, ciphertext_len)) != 0)
+		fatal_fr(r, "parse ciphertext");
+	sshbuf_free(m);
+
+	return ok != 0 ? 0 : SSH_ERR_INVALID_FORMAT;
+}
+
+int
+mm_auth_kem_respond(const u_char *response, size_t response_len,
+    const char *method, int *authenticated)
+{
+	struct sshbuf *m;
+	u_int ok = 0;
+	int r;
+
+	if (authenticated != NULL)
+		*authenticated = 0;
+	if (response == NULL || method == NULL || authenticated == NULL)
+		return SSH_ERR_INVALID_ARGUMENT;
+
+	if ((m = sshbuf_new()) == NULL)
+		fatal_f("sshbuf_new failed");
+	if ((r = sshbuf_put_cstring(m, method)) != 0 ||
+	    (r = sshbuf_put_string(m, response, response_len)) != 0)
+		fatal_fr(r, "assemble");
+
+	mm_request_send(pmonitor->m_recvfd, MONITOR_REQ_KEM_RESP, m);
+	mm_request_receive_expect(pmonitor->m_recvfd, MONITOR_ANS_KEM_RESP, m);
+
+	if ((r = sshbuf_get_u32(m, &ok)) != 0)
+		fatal_fr(r, "parse");
+	sshbuf_free(m);
+
+	*authenticated = ok != 0;
+	return 0;
+}
+
+int
 mm_user_key_allowed(struct ssh *ssh, struct passwd *pw, struct sshkey *key,
     int pubkey_auth_attempt, struct sshauthopt **authoptp)
 {

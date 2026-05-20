@@ -74,6 +74,7 @@
 #include "utf8.h"
 #include "ssh-sk.h"
 #include "sk-api.h"
+#include "ssh-kem.h"
 #include "oqs/oqs.h"
 #include "oqs-utils.h"
 
@@ -399,6 +400,9 @@ struct cauthctxt {
 	/* kbd-interactive */
 	int info_req_seen;
 	int attempt_kbdint;
+	/* kem */
+	int attempt_kem;
+	int attempt_kem_and;
 	/* password */
 	int attempt_passwd;
 	/* generic */
@@ -413,16 +417,25 @@ struct cauthmethod {
 	int	*batch_flag;	/* flag in option struct that disables method */
 };
 
+struct kem_client_ctx {
+	struct ssh_kem_identity *identity;
+	char *packet_method;
+};
+
 static int input_userauth_service_accept(int, u_int32_t, struct ssh *);
 static int input_userauth_success(int, u_int32_t, struct ssh *);
 static int input_userauth_failure(int, u_int32_t, struct ssh *);
 static int input_userauth_banner(int, u_int32_t, struct ssh *);
 static int input_userauth_error(int, u_int32_t, struct ssh *);
 static int input_userauth_info_req(int, u_int32_t, struct ssh *);
+static int input_userauth_kem_info_req(int, u_int32_t, struct ssh *);
 static int input_userauth_pk_ok(int, u_int32_t, struct ssh *);
 static int input_userauth_passwd_changereq(int, u_int32_t, struct ssh *);
 
 static int userauth_none(struct ssh *);
+static int userauth_kem(struct ssh *);
+static int userauth_kem_and(struct ssh *);
+static void userauth_kem_cleanup(struct ssh *);
 static int userauth_pubkey(struct ssh *);
 static int userauth_passwd(struct ssh *);
 static int userauth_kbdint(struct ssh *);
@@ -444,6 +457,9 @@ static int sign_and_send_pubkey(struct ssh *ssh, Identity *);
 static void pubkey_prepare(struct ssh *, Authctxt *);
 static void pubkey_reset(Authctxt *);
 static struct sshkey *load_identity_file(Identity *);
+static char *key_sig_algorithm(struct ssh *ssh, const struct sshkey *key);
+static int identity_sign(struct identity *id, u_char **sigp, size_t *lenp,
+	const u_char *data, size_t datalen, u_int compat, const char *alg);
 
 static Authmethod *authmethod_get(char *authlist);
 static Authmethod *authmethod_lookup(const char *name);
@@ -462,7 +478,22 @@ Authmethod authmethods[] = {
 		NULL,
 		&options.hostbased_authentication,
 		NULL},
+	{"publickey-kem",
+		userauth_kem,
+		userauth_kem_cleanup,
+		&options.kem_authentication,
+		NULL},
+	{"publickey-kem-and",
+		userauth_kem_and,
+		userauth_kem_cleanup,
+		&options.kem_authentication,
+		NULL},
 	{"publickey",
+		userauth_pubkey,
+		NULL,
+		&options.pubkey_authentication,
+		NULL},
+	{"publickey-hybrid-and",
 		userauth_pubkey,
 		NULL,
 		&options.pubkey_authentication,
@@ -509,6 +540,8 @@ ssh_userauth2(struct ssh *ssh, const char *local_user,
 	authctxt.active_ktype = authctxt.oktypes = authctxt.ktypes = NULL;
 	authctxt.info_req_seen = 0;
 	authctxt.attempt_kbdint = 0;
+	authctxt.attempt_kem = 0;
+	authctxt.attempt_kem_and = 0;
 	authctxt.attempt_passwd = 0;
 #if GSSAPI
 	authctxt.gss_supported_mechs = NULL;
@@ -1098,6 +1131,265 @@ userauth_none(struct ssh *ssh)
 }
 
 static int
+userauth_kem(struct ssh *ssh)
+{
+	Authctxt *authctxt = (Authctxt *)ssh->authctxt;
+	struct kem_client_ctx *ctx = NULL;
+	const u_char *public_key, *secret_key;
+	size_t public_key_len, secret_key_len;
+	char *alg = NULL;
+	int r;
+
+	if (authctxt->attempt_kem++ > 0)
+		return 0;
+	if (options.identity_kem_file == NULL)
+		return 0;
+	ctx = xcalloc(1, sizeof(*ctx));
+	ctx->packet_method = xstrdup(authctxt->method->name);
+	if ((r = ssh_kem_load_identity(options.identity_kem_file,
+	    &ctx->identity)) != 0) {
+		free(ctx->packet_method);
+		free(ctx);
+		return 0;
+	}
+	alg = ssh_kem_first_alg(options.kem_auth_algorithms);
+	public_key = ssh_kem_identity_public_key(ctx->identity, &public_key_len);
+	secret_key = ssh_kem_identity_secret_key(ctx->identity, &secret_key_len);
+	if (alg == NULL || public_key == NULL || secret_key == NULL ||
+	    !ssh_kem_name_equal(alg, ssh_kem_identity_alg(ctx->identity))) {
+		ssh_kem_identity_free(ctx->identity);
+		free(ctx->packet_method);
+		free(alg);
+		free(ctx);
+		return 0;
+	}
+	authctxt->methoddata = ctx;
+	if ((r = sshpkt_start(ssh, SSH2_MSG_USERAUTH_REQUEST)) != 0 ||
+	    (r = sshpkt_put_cstring(ssh, authctxt->server_user)) != 0 ||
+	    (r = sshpkt_put_cstring(ssh, authctxt->service)) != 0 ||
+	    (r = sshpkt_put_cstring(ssh, authctxt->method->name)) != 0 ||
+	    (r = sshpkt_put_cstring(ssh, alg)) != 0 ||
+	    (r = sshpkt_put_string(ssh, public_key, public_key_len)) != 0 ||
+	    (r = sshpkt_send(ssh)) != 0)
+		fatal_fr(r, "send packet");
+	ssh_dispatch_set(ssh, SSH2_MSG_USERAUTH_KEM_CHALLENGE,
+	    &input_userauth_kem_info_req);
+	free(alg);
+	return 1;
+}
+
+static int
+userauth_kem_and(struct ssh *ssh)
+{
+	Authctxt *authctxt = (Authctxt *)ssh->authctxt;
+	struct kem_client_ctx *ctx = NULL;
+	Identity sign_id;
+	struct sshkey *private_key = NULL, *pubkey = NULL;
+	struct sshbuf *signed_data = NULL;
+	u_char *pkblob = NULL, *sig = NULL;
+	const u_char *kem_public_key, *kem_secret_key;
+	size_t kem_public_key_len, kem_secret_key_len, pkblob_len = 0, siglen = 0;
+	char *kem_alg = NULL;
+	char *pkalg = NULL;
+	int sent = 0, i, r;
+
+	if (authctxt->attempt_kem_and++ > 0)
+		return 0;
+	if (options.identity_kem_file == NULL || options.num_identity_files <= 0)
+		return 0;
+	ctx = xcalloc(1, sizeof(*ctx));
+	ctx->packet_method = xstrdup(authctxt->method->name);
+	if ((r = ssh_kem_load_identity(options.identity_kem_file,
+	    &ctx->identity)) != 0) {
+		free(ctx->packet_method);
+		free(ctx);
+		return 0;
+	}
+	kem_alg = ssh_kem_first_alg(options.kem_auth_algorithms);
+	kem_public_key = ssh_kem_identity_public_key(ctx->identity,
+	    &kem_public_key_len);
+	kem_secret_key = ssh_kem_identity_secret_key(ctx->identity,
+	    &kem_secret_key_len);
+	if (kem_alg == NULL || kem_public_key == NULL || kem_secret_key == NULL ||
+	    !ssh_kem_name_equal(kem_alg, ssh_kem_identity_alg(ctx->identity))) {
+		userauth_kem_cleanup(ssh);
+		free(ctx->packet_method);
+		free(kem_alg);
+		free(ctx);
+		return 0;
+	}
+	for (i = 0; i < options.num_identity_files; i++) {
+		memset(&sign_id, 0, sizeof(sign_id));
+		sign_id.agent_fd = -1;
+		sign_id.filename = options.identity_files[i];
+		sign_id.userprovided = options.identity_file_userprovided[i];
+		if ((private_key = load_identity_file(&sign_id)) == NULL)
+			continue;
+		sign_id.key = private_key;
+		sign_id.isprivate = 1;
+		if ((r = sshkey_from_private(private_key, &pubkey)) != 0)
+			goto out;
+		if ((pkalg = key_sig_algorithm(ssh, pubkey)) == NULL)
+			goto next_identity;
+		if ((r = sshkey_to_blob(pubkey, &pkblob, &pkblob_len)) != 0)
+			goto out;
+		if ((signed_data = sshbuf_new()) == NULL)
+			fatal_f("sshbuf_new failed");
+		if (ssh->compat & SSH_OLD_SESSIONID) {
+			if ((r = sshbuf_putb(signed_data, ssh->kex->session_id)) != 0)
+				fatal_fr(r, "put old session id");
+		} else {
+			if ((r = sshbuf_put_stringb(signed_data,
+			    ssh->kex->session_id)) != 0)
+				fatal_fr(r, "put session id");
+		}
+		if ((r = sshbuf_put_u8(signed_data, SSH2_MSG_USERAUTH_REQUEST)) != 0 ||
+		    (r = sshbuf_put_cstring(signed_data, authctxt->server_user)) != 0 ||
+		    (r = sshbuf_put_cstring(signed_data, authctxt->service)) != 0 ||
+		    (r = sshbuf_put_cstring(signed_data, ctx->packet_method)) != 0 ||
+		    (r = sshbuf_put_u8(signed_data, 1)) != 0 ||
+		    (r = sshbuf_put_cstring(signed_data, pkalg)) != 0 ||
+		    (r = sshbuf_put_string(signed_data, pkblob, pkblob_len)) != 0 ||
+		    (r = sshbuf_put_cstring(signed_data, kem_alg)) != 0 ||
+		    (r = sshbuf_put_string(signed_data,
+		    kem_public_key, kem_public_key_len)) != 0)
+			fatal_fr(r, "assemble %s packet", ctx->packet_method);
+		if ((r = identity_sign(&sign_id, &sig, &siglen,
+		    sshbuf_ptr(signed_data), sshbuf_len(signed_data), ssh->compat,
+		    pkalg)) != 0)
+			goto next_identity;
+		if ((r = sshpkt_start(ssh, SSH2_MSG_USERAUTH_REQUEST)) != 0 ||
+		    (r = sshpkt_put_cstring(ssh, authctxt->server_user)) != 0 ||
+		    (r = sshpkt_put_cstring(ssh, authctxt->service)) != 0 ||
+		    (r = sshpkt_put_cstring(ssh, ctx->packet_method)) != 0 ||
+		    (r = sshpkt_put_u8(ssh, 1)) != 0 ||
+		    (r = sshpkt_put_cstring(ssh, pkalg)) != 0 ||
+		    (r = sshpkt_put_string(ssh, pkblob, pkblob_len)) != 0 ||
+		    (r = sshpkt_put_string(ssh, sig, siglen)) != 0 ||
+		    (r = sshpkt_put_cstring(ssh, kem_alg)) != 0 ||
+		    (r = sshpkt_put_string(ssh, kem_public_key,
+		    kem_public_key_len)) != 0 ||
+		    (r = sshpkt_send(ssh)) != 0)
+			fatal_fr(r, "send packet");
+		authctxt->methoddata = ctx;
+		ssh_dispatch_set(ssh, SSH2_MSG_USERAUTH_KEM_CHALLENGE,
+		    &input_userauth_kem_info_req);
+		sent = 1;
+		goto out;
+next_identity:
+		sshbuf_free(signed_data);
+		signed_data = NULL;
+		freezero(sig, siglen);
+		sig = NULL;
+		siglen = 0;
+		free(pkblob);
+		pkblob = NULL;
+		pkblob_len = 0;
+		free(pkalg);
+		pkalg = NULL;
+		sshkey_free(pubkey);
+		pubkey = NULL;
+		sshkey_free(private_key);
+		private_key = NULL;
+	}
+out:
+	sshbuf_free(signed_data);
+	freezero(sig, siglen);
+	free(pkblob);
+	free(kem_alg);
+	free(pkalg);
+	sshkey_free(pubkey);
+	sshkey_free(private_key);
+	if (!sent) {
+		userauth_kem_cleanup(ssh);
+		free(ctx->packet_method);
+		free(ctx);
+	}
+	return sent;
+}
+
+static void
+userauth_kem_cleanup(struct ssh *ssh)
+{
+	Authctxt *authctxt = (Authctxt *)ssh->authctxt;
+	struct kem_client_ctx *ctx;
+
+	ssh_dispatch_set(ssh, SSH2_MSG_USERAUTH_KEM_CHALLENGE, NULL);
+	if (authctxt == NULL || authctxt->methoddata == NULL)
+		return;
+	ctx = authctxt->methoddata;
+	ssh_kem_identity_free(ctx->identity);
+	ctx->identity = NULL;
+	free(ctx->packet_method);
+	ctx->packet_method = NULL;
+}
+
+static int
+input_userauth_kem_info_req(int type, u_int32_t seq, struct ssh *ssh)
+{
+	Authctxt *authctxt = ssh->authctxt;
+	struct kem_client_ctx *ctx = authctxt != NULL ? authctxt->methoddata : NULL;
+	const u_char *public_key, *secret_key;
+	size_t public_key_len, secret_key_len, ciphertext_len = 0, echoed_key_len = 0;
+	struct sshkem *kem = NULL;
+	char *alg = NULL;
+	u_char *ciphertext = NULL, *echoed_key = NULL;
+	u_char *shared_secret = NULL;
+	u_char *response = NULL;
+	size_t response_len = 0;
+	int r;
+
+	if (authctxt == NULL || ctx == NULL || ctx->identity == NULL)
+		fatal_f("missing KEM auth context");
+	if ((r = sshpkt_get_cstring(ssh, &alg, NULL)) != 0 ||
+	    (r = sshpkt_get_string(ssh, &echoed_key, &echoed_key_len)) != 0 ||
+	    (r = sshpkt_get_string(ssh, &ciphertext, &ciphertext_len)) != 0 ||
+	    (r = sshpkt_get_end(ssh)) != 0)
+		goto out;
+	if (!ssh_kem_name_equal(alg, ssh_kem_identity_alg(ctx->identity))) {
+		r = SSH_ERR_INVALID_FORMAT;
+		goto out;
+	}
+	public_key = ssh_kem_identity_public_key(ctx->identity, &public_key_len);
+	if (echoed_key_len != public_key_len ||
+	    memcmp(echoed_key, public_key, public_key_len) != 0) {
+		r = SSH_ERR_INVALID_FORMAT;
+		goto out;
+	}
+	if ((kem = ssh_kem_new(alg)) == NULL) {
+		r = SSH_ERR_INVALID_FORMAT;
+		goto out;
+	}
+	if ((response_len = ssh_kem_response_len(alg)) == 0) {
+		r = SSH_ERR_INVALID_FORMAT;
+		goto out;
+	}
+	secret_key = ssh_kem_identity_secret_key(ctx->identity, &secret_key_len);
+	shared_secret = xcalloc(ssh_kem_shared_secret_len(kem), sizeof(*shared_secret));
+	response = xcalloc(response_len, sizeof(*response));
+	if ((r = ssh_kem_decaps(kem, shared_secret, ciphertext, secret_key)) != 0 ||
+	    (r = ssh_kem_derive_response(ssh, authctxt->server_user,
+	    authctxt->service,
+	    ctx->packet_method != NULL ? ctx->packet_method : SSH_KEM_AUTH_METHOD,
+	    alg, public_key, public_key_len,
+	    ciphertext, ciphertext_len, shared_secret,
+	    ssh_kem_shared_secret_len(kem), response, response_len)) != 0)
+		goto out;
+	if ((r = sshpkt_start(ssh, SSH2_MSG_USERAUTH_KEM_RESPONSE)) != 0 ||
+	    (r = sshpkt_put_string(ssh, response, response_len)) != 0 ||
+	    (r = sshpkt_send(ssh)) != 0)
+		goto out;
+	out:
+	free(alg);
+	free(echoed_key);
+	free(ciphertext);
+	freezero(response, response_len);
+	freezero(shared_secret, kem != NULL ? ssh_kem_shared_secret_len(kem) : 0);
+	ssh_kem_free(kem);
+	return r;
+}
+
+static int
 userauth_passwd(struct ssh *ssh)
 {
 	Authctxt *authctxt = (Authctxt *)ssh->authctxt;
@@ -1387,11 +1679,15 @@ sign_and_send_pubkey(struct ssh *ssh, Identity *id)
 	size_t slen = 0, skip = 0;
 	int r, fallback_sigtype, sent = 0;
 	char *alg = NULL, *fp = NULL;
-	const char *loc = "", *method = "publickey";
+	const char *loc = "", *method;
 	int hostbound = 0;
 
-	/* prefer host-bound pubkey signatures if supported by server */
-	if ((ssh->kex->flags & KEX_HAS_PUBKEY_HOSTBOUND) != 0 &&
+	method = (authctxt->method != NULL && authctxt->method->name != NULL) ?
+	    authctxt->method->name : "publickey";
+
+	/* hostbound is only valid for the base publickey method */
+	if (strcmp(method, "publickey") == 0 &&
+	    (ssh->kex->flags & KEX_HAS_PUBKEY_HOSTBOUND) != 0 &&
 	    (options.pubkey_authentication & SSH_PUBKEY_AUTH_HBOUND) != 0) {
 		hostbound = 1;
 		method = "publickey-hostbound-v00@openssh.com";

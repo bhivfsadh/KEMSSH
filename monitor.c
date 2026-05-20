@@ -44,6 +44,11 @@
 #include <stdio.h>
 #include <unistd.h>
 #include <poll.h>
+#ifdef USE_SYSTEM_GLOB
+# include <glob.h>
+#else
+# include "openbsd-compat/glob.h"
+#endif
 
 #ifdef WITH_OPENSSL
 #include <openssl/dh.h>
@@ -84,10 +89,14 @@
 #include "compat.h"
 #include "ssh2.h"
 #include "authfd.h"
+#include "digest.h"
+#include "hmac.h"
 #include "match.h"
 #include "ssherr.h"
+#include "ssh-kem.h"
 #include "sk-api.h"
 #include "srclimit.h"
+#include "uidswap.h"
 
 #ifdef GSSAPI
 static Gssctxt *gsscontext = NULL;
@@ -100,6 +109,7 @@ extern struct sshbuf *cfg;
 extern struct sshbuf *loginmsg;
 extern struct include_list includes;
 extern struct sshauthopt *auth_opts; /* XXX move to permanent ssh->authctxt? */
+FILE *auth_openkeyfile(const char *file, struct passwd *pw, int strict_modes);
 
 /* State exported from the child */
 static struct sshbuf *child_state;
@@ -116,6 +126,8 @@ int mm_answer_bsdauthquery(struct ssh *, int, struct sshbuf *);
 int mm_answer_bsdauthrespond(struct ssh *, int, struct sshbuf *);
 int mm_answer_keyallowed(struct ssh *, int, struct sshbuf *);
 int mm_answer_keyverify(struct ssh *, int, struct sshbuf *);
+int mm_answer_kem_init(struct ssh *, int, struct sshbuf *);
+int mm_answer_kem_resp(struct ssh *, int, struct sshbuf *);
 int mm_answer_pty(struct ssh *, int, struct sshbuf *);
 int mm_answer_pty_cleanup(struct ssh *, int, struct sshbuf *);
 int mm_answer_term(struct ssh *, int, struct sshbuf *);
@@ -153,6 +165,10 @@ static char *hostbased_cuser = NULL;
 static char *hostbased_chost = NULL;
 static char *auth_method = "unknown";
 static char *auth_submethod = NULL;
+static u_char *kem_expected_response = NULL;
+static size_t kem_expected_response_len = 0;
+static char *kem_alg = NULL;
+static char *kem_method = NULL;
 static u_int session_id2_len = 0;
 static u_char *session_id2 = NULL;
 static pid_t monitor_child_pid;
@@ -204,6 +220,8 @@ struct mon_table mon_dispatch_proto20[] = {
 #endif
     {MONITOR_REQ_KEYALLOWED, MON_ISAUTH, mm_answer_keyallowed},
     {MONITOR_REQ_KEYVERIFY, MON_AUTH, mm_answer_keyverify},
+	{MONITOR_REQ_KEM_INIT, MON_ISAUTH, mm_answer_kem_init},
+	{MONITOR_REQ_KEM_RESP, MON_AUTH, mm_answer_kem_resp},
 #ifdef GSSAPI
     {MONITOR_REQ_GSSSETUP, MON_ISAUTH, mm_answer_gss_setup_ctx},
     {MONITOR_REQ_GSSSTEP, 0, mm_answer_gss_accept_ctx},
@@ -583,6 +601,284 @@ monitor_reset_key_state(void)
 	key_opts = NULL;
 	hostbased_cuser = NULL;
 	hostbased_chost = NULL;
+	freezero(kem_expected_response, kem_expected_response_len);
+	kem_expected_response = NULL;
+	kem_expected_response_len = 0;
+	free(kem_alg);
+	kem_alg = NULL;
+	free(kem_method);
+	kem_method = NULL;
+}
+
+static int
+kem_ct_memeq(const u_char *left, size_t left_len, const u_char *right,
+    size_t right_len)
+{
+	size_t i, max = left_len > right_len ? left_len : right_len;
+	u_char diff = (u_char)(left_len ^ right_len);
+
+	for (i = 0; i < max; i++) {
+		u_char l = i < left_len ? left[i] : 0;
+		u_char r = i < right_len ? right[i] : 0;
+		diff |= l ^ r;
+	}
+	return diff == 0;
+}
+
+static int
+auth_check_kem_keys_file(FILE *f, const char *file, const char *alg,
+    const u_char *public_key, size_t public_key_len)
+{
+	char *line = NULL, *cp, *ep, *line_alg, *line_key;
+	size_t linesize = 0, key_len = 0;
+	u_long linenum = 0;
+	u_char *decoded = NULL;
+	int found = 0;
+
+	while (getline(&line, &linesize, f) != -1) {
+		linenum++;
+		cp = line;
+		skip_space(&cp);
+		if ((ep = strchr(cp, '#')) != NULL)
+			*ep = '\0';
+		if (*cp == '\0' || *cp == '\n')
+			continue;
+		line_alg = strsep(&cp, " \t\r\n");
+		if (line_alg == NULL || cp == NULL)
+			continue;
+		skip_space(&cp);
+		line_key = strsep(&cp, " \t\r\n");
+		if (line_key == NULL)
+			continue;
+		free(decoded);
+		decoded = NULL;
+		key_len = 0;
+		if (ssh_kem_b64_decode(line_key, &decoded, &key_len) != 0)
+			continue;
+		if (!ssh_kem_name_equal(line_alg, alg))
+			continue;
+		if (kem_ct_memeq(decoded, key_len, public_key, public_key_len)) {
+			found = 1;
+			break;
+		}
+	}
+	free(decoded);
+	free(line);
+	return found;
+}
+
+static int
+kem_key_allowed(struct passwd *pw, const char *alg,
+    const u_char *public_key, size_t public_key_len)
+{
+	int success = 0, r;
+	u_int i, j;
+	char *file = NULL;
+	FILE *f = NULL;
+
+	for (i = 0; !success && i < options.num_authorized_kem_keys_files; i++) {
+		glob_t gl;
+
+		if (strcasecmp(options.authorized_kem_keys_files[i], "none") == 0)
+			continue;
+		file = expand_authorized_keys(options.authorized_kem_keys_files[i], pw);
+		temporarily_use_uid(pw);
+		r = glob(file, 0, NULL, &gl);
+		restore_uid();
+		if (r != 0) {
+			free(file);
+			file = NULL;
+			continue;
+		}
+		for (j = 0; !success && j < gl.gl_pathc; j++) {
+			if ((f = auth_openkeyfile(gl.gl_pathv[j], pw,
+			    options.strict_modes)) == NULL)
+				continue;
+			success = auth_check_kem_keys_file(f, gl.gl_pathv[j], alg,
+			    public_key, public_key_len);
+			fclose(f);
+			f = NULL;
+		}
+		globfree(&gl);
+		free(file);
+		file = NULL;
+	}
+	return success;
+}
+
+static int
+kem_derive_response_monitor(const char *user, const char *service,
+	const char *method, const char *alg,
+    const u_char *public_key, size_t public_key_len,
+    const u_char *ciphertext, size_t ciphertext_len,
+    const u_char *shared_secret, size_t shared_secret_len,
+    u_char *response, size_t response_len)
+{
+	struct sshbuf *context = NULL;
+	struct ssh_hmac_ctx *hmac = NULL;
+	int digest_alg;
+	int r = SSH_ERR_INTERNAL_ERROR;
+
+	if (session_id2 == NULL || session_id2_len == 0 || user == NULL ||
+	    service == NULL || method == NULL || alg == NULL ||
+	    public_key == NULL ||
+	    ciphertext == NULL || shared_secret == NULL || response == NULL)
+		return SSH_ERR_INVALID_ARGUMENT;
+	if ((digest_alg = ssh_kem_response_digest(alg)) == -1)
+		return SSH_ERR_INVALID_ARGUMENT;
+	if (response_len < ssh_hmac_bytes(digest_alg))
+		return SSH_ERR_INVALID_ARGUMENT;
+	if ((context = sshbuf_new()) == NULL)
+		return SSH_ERR_ALLOC_FAIL;
+	if ((r = sshbuf_put_u8(context, SSH2_MSG_USERAUTH_REQUEST)) != 0 ||
+	    (r = sshbuf_put_cstring(context, user)) != 0 ||
+	    (r = sshbuf_put_cstring(context, service)) != 0 ||
+	    (r = sshbuf_put_cstring(context, method)) != 0 ||
+	    (r = sshbuf_put_cstring(context, alg)) != 0 ||
+	    (r = sshbuf_put_string(context, public_key, public_key_len)) != 0 ||
+	    (r = sshbuf_put_u8(context, SSH2_MSG_USERAUTH_KEM_CHALLENGE)) != 0 ||
+	    (r = sshbuf_put_cstring(context, alg)) != 0 ||
+	    (r = sshbuf_put_string(context, public_key, public_key_len)) != 0 ||
+	    (r = sshbuf_put_string(context, ciphertext, ciphertext_len)) != 0)
+		goto out;
+	if ((hmac = ssh_hmac_start(digest_alg)) == NULL) {
+		r = SSH_ERR_ALLOC_FAIL;
+		goto out;
+	}
+	if ((r = ssh_hmac_init(hmac, shared_secret, shared_secret_len)) != 0 ||
+	    (r = ssh_hmac_update_buffer(hmac, context)) != 0 ||
+	    (r = ssh_hmac_update(hmac, session_id2, session_id2_len)) != 0 ||
+	    (r = ssh_hmac_final(hmac, response,
+	    ssh_hmac_bytes(digest_alg))) != 0)
+		goto out;
+	r = 0;
+out:
+	ssh_hmac_free(hmac);
+	sshbuf_free(context);
+	return r;
+}
+
+int
+mm_answer_kem_init(struct ssh *ssh, int sock, struct sshbuf *m)
+{
+	struct sshbuf *reply;
+	struct sshkem *kem = NULL;
+	u_char *public_key = NULL, *ciphertext = NULL, *shared_secret = NULL;
+	u_char *expected = NULL;
+	size_t public_key_len = 0, ciphertext_len = 0, shared_secret_len = 0;
+	char *method = NULL, *alg = NULL;
+	u_int allowed = 0;
+	int r;
+
+	if ((reply = sshbuf_new()) == NULL)
+		fatal_f("sshbuf_new failed");
+	if ((r = sshbuf_get_cstring(m, &method, NULL)) != 0 ||
+	    (r = sshbuf_get_cstring(m, &alg, NULL)) != 0 ||
+	    (r = sshbuf_get_string(m, &public_key, &public_key_len)) != 0)
+		fatal_fr(r, "parse");
+	if (sshbuf_len(m) != 0)
+		fatal_f("invalid KEM init request");
+
+	monitor_reset_key_state();
+
+	if (!options.kem_authentication || !authctxt->valid ||
+	    !ssh_kem_name_permitted(options.kem_auth_algorithms, alg) ||
+	    !auth2_method_allowed(authctxt, method, alg) ||
+	    !kem_key_allowed(authctxt->pw, alg, public_key, public_key_len) ||
+	    (kem = ssh_kem_new(alg)) == NULL)
+		goto out;
+
+	shared_secret_len = ssh_kem_shared_secret_len(kem);
+	ciphertext_len = ssh_kem_ciphertext_len(kem);
+	ciphertext = xcalloc(ciphertext_len, sizeof(*ciphertext));
+	shared_secret = xcalloc(shared_secret_len, sizeof(*shared_secret));
+	kem_expected_response_len = ssh_kem_response_len(alg);
+	if (kem_expected_response_len == 0) {
+		r = SSH_ERR_INVALID_FORMAT;
+		goto out;
+	}
+	expected = xcalloc(kem_expected_response_len, sizeof(*expected));
+	if ((r = ssh_kem_encaps(kem, ciphertext, shared_secret, public_key)) != 0 ||
+	    (r = kem_derive_response_monitor(authctxt->user, authctxt->service,
+	    method,
+	    alg, public_key, public_key_len,
+	    ciphertext, ciphertext_len,
+	    shared_secret, shared_secret_len, expected,
+	    kem_expected_response_len)) != 0)
+		goto out;
+
+	kem_expected_response = expected;
+	expected = NULL;
+	kem_method = xstrdup(method);
+	kem_alg = xstrdup(alg);
+	allowed = 1;
+
+out:
+	if ((r = sshbuf_put_u32(reply, allowed)) != 0)
+		fatal_fr(r, "assemble");
+	if (allowed &&
+	    (r = sshbuf_put_string(reply, ciphertext, ciphertext_len)) != 0)
+		fatal_fr(r, "assemble ciphertext");
+	mm_request_send(sock, MONITOR_ANS_KEM_INIT, reply);
+
+	sshbuf_free(reply);
+	ssh_kem_free(kem);
+	free(method);
+	free(alg);
+	free(public_key);
+	free(ciphertext);
+	freezero(shared_secret, shared_secret_len);
+	freezero(expected, kem_expected_response_len);
+	if (!allowed)
+		kem_expected_response_len = 0;
+	return 0;
+}
+
+int
+mm_answer_kem_resp(struct ssh *ssh, int sock, struct sshbuf *m)
+{
+	struct sshbuf *reply;
+	char *method = NULL;
+	u_char *response = NULL;
+	size_t response_len = 0;
+	u_int authenticated = 0;
+	int r;
+
+	if ((reply = sshbuf_new()) == NULL)
+		fatal_f("sshbuf_new failed");
+	if ((r = sshbuf_get_cstring(m, &method, NULL)) != 0 ||
+	    (r = sshbuf_get_string(m, &response, &response_len)) != 0)
+		fatal_fr(r, "parse");
+	if (sshbuf_len(m) != 0)
+		fatal_f("invalid KEM response request");
+
+	if (kem_expected_response != NULL && kem_method != NULL &&
+	    strcmp(method, kem_method) == 0 &&
+	    kem_ct_memeq(response, response_len, kem_expected_response,
+	    kem_expected_response_len)) {
+		authenticated = 1;
+		auth_method = kem_method;
+		auth_submethod = kem_alg;
+		auth2_record_info(authctxt, "kem algorithm %s",
+		    kem_alg != NULL ? kem_alg : method);
+	}
+	freezero(kem_expected_response, kem_expected_response_len);
+	kem_expected_response = NULL;
+	kem_expected_response_len = 0;
+	if (!authenticated) {
+		free(kem_alg);
+		kem_alg = NULL;
+		auth_submethod = NULL;
+	}
+
+	if ((r = sshbuf_put_u32(reply, authenticated)) != 0)
+		fatal_fr(r, "assemble");
+	mm_request_send(sock, MONITOR_ANS_KEM_RESP, reply);
+
+	sshbuf_free(reply);
+	free(method);
+	freezero(response, response_len);
+	return authenticated;
 }
 
 int
@@ -1369,6 +1665,7 @@ monitor_valid_userblob(struct ssh *ssh, const u_char *data, u_int datalen)
 	size_t len;
 	u_char type;
 	int hostbound = 0, r, fail = 0;
+	int kem_and = 0;
 
 	if ((b = sshbuf_from(data, datalen)) == NULL)
 		fatal_f("sshbuf_from");
@@ -1409,11 +1706,15 @@ monitor_valid_userblob(struct ssh *ssh, const u_char *data, u_int datalen)
 	if ((r = sshbuf_skip_string(b)) != 0 ||	/* service */
 	    (r = sshbuf_get_cstring(b, &cp, NULL)) != 0)
 		fatal_fr(r, "parse method");
-	if (strcmp("publickey", cp) != 0) {
+	if (strcmp("publickey", cp) != 0 &&
+	    strcmp("publickey-hybrid-and", cp) != 0 &&
+	    strcmp("publickey-kem-and", cp) != 0) {
 		if (strcmp("publickey-hostbound-v00@openssh.com", cp) == 0)
 			hostbound = 1;
 		else
 			fail++;
+	} else if (strcmp("publickey-kem-and", cp) == 0) {
+		kem_and = 1;
 	}
 	free(cp);
 	if ((r = sshbuf_get_u8(b, &type)) != 0)
@@ -1422,6 +1723,8 @@ monitor_valid_userblob(struct ssh *ssh, const u_char *data, u_int datalen)
 		fail++;
 	if ((r = sshbuf_skip_string(b)) != 0 ||	/* pkalg */
 	    (r = sshbuf_skip_string(b)) != 0 ||	/* pkblob */
+	    (kem_and && (r = sshbuf_skip_string(b)) != 0) ||	/* kem alg */
+	    (kem_and && (r = sshbuf_skip_string(b)) != 0) ||	/* kem pk */
 	    (hostbound && (r = sshkey_froms(b, &hostkey)) != 0))
 		fatal_fr(r, "parse pk");
 	if (sshbuf_len(b) != 0)

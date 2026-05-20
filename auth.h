@@ -115,6 +115,8 @@ struct Authmethod {
 	int	(*userauth)(struct ssh *, const char *);
 };
 
+extern struct authmethod_cfg methodcfg_kem;
+
 /*
  * Keyboard interactive device:
  * init_ctx	returns: non NULL upon success

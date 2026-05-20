@@ -29,8 +29,17 @@
 #include "sshbuf.h"
 #define SSHKEY_INTERNAL
 #include "sshkey.h"
+#include "oqs-utils.h"
 #include "ssherr.h"
 #include "ssh.h"
+
+static int
+ssh_ed25519_accepts_type(int type)
+{
+	int plain = sshkey_type_plain(type);
+
+	return plain == KEY_ED25519 || oqs_utils_is_ed25519_hybrid(plain);
+}
 
 static void
 ssh_ed25519_cleanup(struct sshkey *k)
@@ -159,7 +168,7 @@ ssh_ed25519_sign(struct sshkey *key,
 		*sigp = NULL;
 
 	if (key == NULL ||
-	    sshkey_type_plain(key->type) != KEY_ED25519 ||
+	    !ssh_ed25519_accepts_type(key->type) ||
 	    key->ed25519_sk == NULL ||
 	    datalen >= INT_MAX - crypto_sign_ed25519_BYTES)
 		return SSH_ERR_INVALID_ARGUMENT;
@@ -239,7 +248,7 @@ ssh_ed25519_verify(const struct sshkey *key,
 	int r, ret;
 
 	if (key == NULL ||
-	    sshkey_type_plain(key->type) != KEY_ED25519 ||
+	    !ssh_ed25519_accepts_type(key->type) ||
 	    key->ed25519_pk == NULL ||
 	    dlen >= INT_MAX - crypto_sign_ed25519_BYTES ||
 	    sig == NULL || siglen == 0)

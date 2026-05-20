@@ -135,6 +135,8 @@ typedef struct {
 	char   *hostbased_accepted_algos; /* Algos allowed for hostbased */
 	char   *hostkeyalgorithms;	/* SSH2 server key types */
 	char   *ca_sign_algorithms;	/* Allowed CA signature algorithms */
+	int	kem_authentication;	/* If true, permit ssh2 KEM authentication. */
+	char   *kem_auth_algorithms;	/* KEM auth algorithms allowed by server */
 	int     pubkey_authentication;	/* If true, permit ssh2 pubkey authentication. */
 	char   *pubkey_accepted_algos;	/* Signature algos allowed for pubkey */
 	int	pubkey_auth_options;	/* -1 or mask of PUBKEYAUTH_* flags */
@@ -207,6 +209,8 @@ typedef struct {
 
 	u_int	num_authkeys_files;	/* Files containing public keys */
 	char   **authorized_keys_files;
+	u_int	num_authorized_kem_keys_files;
+	char   **authorized_kem_keys_files;
 
 	char   *adm_forced_command;
 
@@ -296,12 +300,15 @@ TAILQ_HEAD(include_list, include_item);
 		M_CP_STROPT(authorized_principals_command); \
 		M_CP_STROPT(authorized_principals_command_user); \
 		M_CP_STROPT(hostbased_accepted_algos); \
+		M_CP_STROPT(kem_auth_algorithms); \
 		M_CP_STROPT(pubkey_accepted_algos); \
 		M_CP_STROPT(ca_sign_algorithms); \
 		M_CP_STROPT(routing_domain); \
 		M_CP_STROPT(permit_user_env_allowlist); \
 		M_CP_STROPT(pam_service_name); \
 		M_CP_STRARRAYOPT(authorized_keys_files, num_authkeys_files); \
+		M_CP_STRARRAYOPT(authorized_kem_keys_files, \
+		    num_authorized_kem_keys_files); \
 		M_CP_STRARRAYOPT(allow_users, num_allow_users); \
 		M_CP_STRARRAYOPT(deny_users, num_deny_users); \
 		M_CP_STRARRAYOPT(allow_groups, num_allow_groups); \

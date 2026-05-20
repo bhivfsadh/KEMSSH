@@ -52,6 +52,7 @@
 #include "misc.h"
 #include "servconf.h"
 #include "pathnames.h"
+#include "ssh-kem.h"
 #include "cipher.h"
 #include "sshkey.h"
 #include "kex.h"
@@ -128,6 +129,8 @@ initialize_server_options(ServerOptions *options)
 	options->hostbased_uses_name_from_packet_only = -1;
 	options->hostbased_accepted_algos = NULL;
 	options->hostkeyalgorithms = NULL;
+	options->kem_authentication = -1;
+	options->kem_auth_algorithms = NULL;
 	options->pubkey_authentication = -1;
 	options->pubkey_auth_options = -1;
 	options->pubkey_accepted_algos = NULL;
@@ -187,6 +190,7 @@ initialize_server_options(ServerOptions *options)
 	options->client_alive_interval = -1;
 	options->client_alive_count_max = -1;
 	options->num_authkeys_files = 0;
+	options->num_authorized_kem_keys_files = 0;
 	options->num_accept_env = 0;
 	options->num_setenv = 0;
 	options->permit_tun = -1;
@@ -517,6 +521,16 @@ fill_default_server_options(ServerOptions *options)
 		    &options->num_authkeys_files,
 		    _PATH_SSH_USER_PERMITTED_KEYS2);
 	}
+	if (options->kem_authentication == -1)
+		options->kem_authentication = 0;
+	if (options->kem_auth_algorithms == NULL)
+		options->kem_auth_algorithms = xstrdup(SSH_KEM_DEFAULT_ALG);
+	if (options->num_authorized_kem_keys_files == 0) {
+		opt_array_append("[default]", 0, "AuthorizedKEMKeysFile",
+		    &options->authorized_kem_keys_files,
+		    &options->num_authorized_kem_keys_files,
+		    _PATH_SSH_USER_PERMITTED_KEM_KEYS);
+	}
 	if (options->permit_tun == -1)
 		options->permit_tun = SSH_TUNMODE_NO;
 	if (options->ip_qos_interactive == -1)
@@ -609,6 +623,7 @@ typedef enum {
 	sRekeyLimit, sAllowUsers, sDenyUsers, sAllowGroups, sDenyGroups,
 	sIgnoreUserKnownHosts, sCiphers, sMacs, sPidFile, sModuliFile,
 	sGatewayPorts, sPubkeyAuthentication, sPubkeyAcceptedAlgorithms,
+	sKEMAuthentication, sKEMAuthAlgorithms, sAuthorizedKEMKeysFile,
 	sXAuthLocation, sSubsystem, sMaxStartups, sMaxAuthTries, sMaxSessions,
 	sBanner, sUseDNS, sHostbasedAuthentication,
 	sHostbasedUsesNameFromPacketOnly, sHostbasedAcceptedAlgorithms,
@@ -675,6 +690,9 @@ static struct {
 	{ "hostbasedacceptedalgorithms", sHostbasedAcceptedAlgorithms, SSHCFG_ALL },
 	{ "hostbasedacceptedkeytypes", sHostbasedAcceptedAlgorithms, SSHCFG_ALL }, /* obsolete */
 	{ "hostkeyalgorithms", sHostKeyAlgorithms, SSHCFG_GLOBAL },
+	{ "kemauthentication", sKEMAuthentication, SSHCFG_ALL },
+	{ "kemauthalgorithms", sKEMAuthAlgorithms, SSHCFG_ALL },
+	{ "authorizedkemkeysfile", sAuthorizedKEMKeysFile, SSHCFG_ALL },
 	{ "rsaauthentication", sDeprecated, SSHCFG_ALL },
 	{ "pubkeyauthentication", sPubkeyAuthentication, SSHCFG_ALL },
 	{ "pubkeyacceptedalgorithms", sPubkeyAcceptedAlgorithms, SSHCFG_ALL },
@@ -1642,6 +1660,23 @@ process_server_config_line_depth(ServerOptions *options, char *line,
 		ca_only = 0;
 		goto parse_pubkey_algos;
 
+	case sKEMAuthentication:
+		intptr = &options->kem_authentication;
+		goto parse_flag;
+
+	case sKEMAuthAlgorithms:
+		charptr = &options->kem_auth_algorithms;
+		arg = argv_next(&ac, &av);
+		if (!arg || *arg == '\0')
+			fatal("%s line %d: %s missing argument.",
+			    filename, linenum, keyword);
+		if (!ssh_kem_names_valid(arg))
+			fatal("%s line %d: Bad KEM auth algorithms '%s'.",
+			    filename, linenum, arg);
+		if (*activep && *charptr == NULL)
+			*charptr = xstrdup(arg);
+		break;
+
 	case sCASignatureAlgorithms:
 		charptr = &options->ca_sign_algorithms;
 		ca_only = 1;
@@ -2247,6 +2282,30 @@ process_server_config_line_depth(ServerOptions *options, char *line,
 			options->authorized_keys_files = strs;
 			options->num_authkeys_files = nstrs;
 			strs = NULL; /* transferred */
+			nstrs = 0;
+		}
+		break;
+
+	case sAuthorizedKEMKeysFile:
+		found = options->num_authorized_kem_keys_files == 0;
+		while ((arg = argv_next(&ac, &av)) != NULL) {
+			if (*arg == '\0') {
+				error("%s line %d: keyword %s empty argument",
+				    filename, linenum, keyword);
+				goto out;
+			}
+			arg2 = tilde_expand_filename(arg, getuid());
+			opt_array_append(filename, linenum, keyword,
+			    &strs, &nstrs, arg2);
+			free(arg2);
+		}
+		if (nstrs == 0)
+			fatal("%s line %d: no %s specified",
+			    filename, linenum, keyword);
+		if (found && *activep) {
+			options->authorized_kem_keys_files = strs;
+			options->num_authorized_kem_keys_files = nstrs;
+			strs = NULL;
 			nstrs = 0;
 		}
 		break;
@@ -3363,6 +3422,7 @@ dump_config(ServerOptions *o)
 	dump_cfg_string(sCASignatureAlgorithms, o->ca_sign_algorithms);
 	dump_cfg_string(sHostbasedAcceptedAlgorithms, o->hostbased_accepted_algos);
 	dump_cfg_string(sHostKeyAlgorithms, o->hostkeyalgorithms);
+	dump_cfg_string(sKEMAuthAlgorithms, o->kem_auth_algorithms);
 	dump_cfg_string(sPubkeyAcceptedAlgorithms, o->pubkey_accepted_algos);
 #if defined(__OpenBSD__) || defined(HAVE_SYS_SET_PROCESS_RDOMAIN)
 	dump_cfg_string(sRDomain, o->routing_domain);
@@ -3378,6 +3438,8 @@ dump_config(ServerOptions *o)
 	/* string array arguments */
 	dump_cfg_strarray_oneline(sAuthorizedKeysFile, o->num_authkeys_files,
 	    o->authorized_keys_files);
+	dump_cfg_strarray_oneline(sAuthorizedKEMKeysFile,
+	    o->num_authorized_kem_keys_files, o->authorized_kem_keys_files);
 	dump_cfg_strarray(sHostKeyFile, o->num_host_key_files,
 	    o->host_key_files);
 	dump_cfg_strarray(sHostCertificate, o->num_host_cert_files,

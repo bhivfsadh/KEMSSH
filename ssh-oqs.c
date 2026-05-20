@@ -38,6 +38,7 @@
 
 #include "oqs/oqs.h"
 
+extern const struct sshkey_impl sshkey_ed25519_impl;
 extern const struct sshkey_impl sshkey_rsa_impl;
 extern const struct sshkey_impl sshkey_ecdsa_nistp256_impl;
 
@@ -57,6 +58,8 @@ static size_t oqs_sig_pk_len(int type)
     case KEY_SLH_DSA_PURE_SHA2_128F:
     case KEY_RSA3072_SLH_DSA_PURE_SHA2_128F:
     case KEY_ECDSA_NISTP256_SLH_DSA_PURE_SHA2_128F:return OQS_SIG_slh_dsa_pure_sha2_128f_length_public_key;
+    case KEY_SLH_DSA_PURE_SHA2_192F:return OQS_SIG_slh_dsa_pure_sha2_192f_length_public_key;
+    case KEY_ECDSA_NISTP384_SLH_DSA_PURE_SHA2_192F:return OQS_SIG_slh_dsa_pure_sha2_192f_length_public_key;
     case KEY_SLH_DSA_PURE_SHA2_256F:
     case KEY_ECDSA_NISTP521_SLH_DSA_PURE_SHA2_256F:return OQS_SIG_slh_dsa_pure_sha2_256f_length_public_key;
     case KEY_ML_DSA_44:
@@ -73,6 +76,8 @@ static size_t oqs_sig_pk_len(int type)
     case KEY_ECDSA_NISTP384_MAYO_3:return OQS_SIG_mayo_3_length_public_key;
     case KEY_MAYO_5:
     case KEY_ECDSA_NISTP521_MAYO_5:return OQS_SIG_mayo_5_length_public_key;
+    case KEY_ED25519_ML_DSA_65:return OQS_SIG_ml_dsa_65_length_public_key;
+    case KEY_ED25519_SLH_DSA_PURE_SHA2_192F:return OQS_SIG_slh_dsa_pure_sha2_192f_length_public_key;
 ///// OQS_TEMPLATE_FRAGMENT_RETURN_PK_LEN_END
   }
   return 0;
@@ -94,6 +99,9 @@ static size_t oqs_sig_sk_len(int type)
     case KEY_RSA3072_SLH_DSA_PURE_SHA2_128F:
     case KEY_ECDSA_NISTP256_SLH_DSA_PURE_SHA2_128F:
       return OQS_SIG_slh_dsa_pure_sha2_128f_length_secret_key;
+    case KEY_SLH_DSA_PURE_SHA2_192F:
+    case KEY_ECDSA_NISTP384_SLH_DSA_PURE_SHA2_192F:
+      return OQS_SIG_slh_dsa_pure_sha2_192f_length_secret_key;
     case KEY_SLH_DSA_PURE_SHA2_256F:
     case KEY_ECDSA_NISTP521_SLH_DSA_PURE_SHA2_256F:
       return OQS_SIG_slh_dsa_pure_sha2_256f_length_secret_key;
@@ -117,6 +125,10 @@ static size_t oqs_sig_sk_len(int type)
     case KEY_MAYO_5:
     case KEY_ECDSA_NISTP521_MAYO_5:
       return OQS_SIG_mayo_5_length_secret_key;
+    case KEY_ED25519_ML_DSA_65:
+      return OQS_SIG_ml_dsa_65_length_secret_key;
+    case KEY_ED25519_SLH_DSA_PURE_SHA2_192F:
+      return OQS_SIG_slh_dsa_pure_sha2_192f_length_secret_key;
 ///// OQS_TEMPLATE_FRAGMENT_RETURN_SK_LEN_END
   }
   return 0;
@@ -798,6 +810,84 @@ const struct sshkey_impl sshkey_slhdsapuresha2128f_impl = {
   /* .funcs = */ &sshkey_slhdsapuresha2128f_funcs,
 };
 /*---------------------------------------------------
+ * SLH_DSA_PURE_SHA2_192F METHODS
+ *---------------------------------------------------
+ */
+static int ssh_slhdsapuresha2192f_generate(struct sshkey *k, int bits)
+{
+  k->oqs_pk_len = oqs_sig_pk_len(k->type);
+  k->oqs_sk_len = oqs_sig_sk_len(k->type);
+  if ((k->oqs_pk = malloc(k->oqs_pk_len)) == NULL ||
+      (k->oqs_sk = malloc(k->oqs_sk_len)) == NULL) {
+    return SSH_ERR_ALLOC_FAIL;
+  }
+  return OQS_SIG_slh_dsa_pure_sha2_192f_keypair(k->oqs_pk, k->oqs_sk);
+}
+
+int ssh_slhdsapuresha2192f_sign(struct sshkey *key,
+                     u_char **sigp,
+                     size_t *lenp,
+                     const u_char *data,
+                     size_t datalen,
+                     const char *alg,
+                     const char *sk_provider,
+                     const char *sk_pin,
+                     u_int compat)
+{
+    OQS_SIG *sig = OQS_SIG_new(OQS_SIG_alg_slh_dsa_pure_sha2_192f);
+    if (sig == NULL) {
+        return SSH_ERR_ALLOC_FAIL;
+    }
+    int r = oqs_sign(sig, "slhdsapuresha2192f", key, sigp, lenp, data, datalen, compat);
+    OQS_SIG_free(sig);
+    return r;
+}
+
+int ssh_slhdsapuresha2192f_verify(const struct sshkey *key,
+                       const u_char *signature,
+                       size_t signaturelen,
+                       const u_char *data,
+                       size_t datalen,
+                       const char *alg,
+                       u_int compat,
+                       struct sshkey_sig_details **detailsp)
+{
+    OQS_SIG *sig = OQS_SIG_new(OQS_SIG_alg_slh_dsa_pure_sha2_192f);
+    if (sig == NULL) {
+        return SSH_ERR_ALLOC_FAIL;
+    }
+    int r = oqs_verify(sig, "slhdsapuresha2192f", key, signature, signaturelen, data, datalen, compat);
+    OQS_SIG_free(sig);
+    return r;
+}
+
+static const struct sshkey_impl_funcs sshkey_slhdsapuresha2192f_funcs = {
+  /* .size = */ ssh_generic_size,
+  /* .alloc = */ ssh_generic_alloc,
+  /* .cleanup = */ ssh_generic_cleanup,
+  /* .equal = */ ssh_generic_equal,
+  /* .ssh_serialize_public = */ ssh_generic_serialize_public,
+  /* .ssh_deserialize_public = */ ssh_generic_deserialize_public,
+  /* .ssh_serialize_private = */ ssh_generic_serialize_private,
+  /* .ssh_deserialize_private = */ ssh_generic_deserialize_private,
+  /* .generate = */ ssh_slhdsapuresha2192f_generate,
+  /* .copy_public = */ ssh_generic_copy_public,
+  /* .sign = */ ssh_slhdsapuresha2192f_sign,
+  /* .verify = */ ssh_slhdsapuresha2192f_verify,
+};
+
+const struct sshkey_impl sshkey_slhdsapuresha2192f_impl = {
+  /* .name = */ "ssh-slhdsapuresha2192f",
+  /* .shortname = */ "SLHDSAPURESHA2192F",
+  /* .sigalg = */ NULL,
+  /* .type = */ KEY_SLH_DSA_PURE_SHA2_192F,
+  /* .nid = */ 0,
+  /* .cert = */ 0,
+  /* .sigonly = */ 0,
+  /* .keybits = */ 0,
+  /* .funcs = */ &sshkey_slhdsapuresha2192f_funcs,
+};
+/*---------------------------------------------------
  * SLH_DSA_PURE_SHA2_256F METHODS
  *---------------------------------------------------
  */
@@ -1344,6 +1434,60 @@ const struct sshkey_impl sshkey_mayo5_impl = {
   /* .funcs = */ &sshkey_mayo5_funcs,
 };
 
+static const struct sshkey_impl_funcs sshkey_ed25519_mldsa65_funcs = {
+  /* .size = */ ssh_generic_size,
+  /* .alloc = */ ssh_generic_alloc,
+  /* .cleanup = */ ssh_generic_cleanup,
+  /* .equal = */ ssh_generic_equal,
+  /* .ssh_serialize_public = */ ssh_generic_serialize_public,
+  /* .ssh_deserialize_public = */ ssh_generic_deserialize_public,
+  /* .ssh_serialize_private = */ ssh_generic_serialize_private,
+  /* .ssh_deserialize_private = */ ssh_generic_deserialize_private,
+  /* .generate = */ ssh_generic_generate,
+  /* .copy_public = */ ssh_generic_copy_public,
+  /* .sign = */ ssh_generic_sign,
+  /* .verify = */ ssh_generic_verify,
+};
+
+const struct sshkey_impl sshkey_ed25519_mldsa65_impl = {
+  /* .name = */ "ssh-ed25519-mldsa-65",
+  /* .shortname = */ "ED25519_MLDSA-65",
+  /* .sigalg = */ NULL,
+  /* .type = */ KEY_ED25519_ML_DSA_65,
+  /* .nid = */ 0,
+  /* .cert = */ 0,
+  /* .sigonly = */ 0,
+  /* .keybits = */ 0,
+  /* .funcs = */ &sshkey_ed25519_mldsa65_funcs,
+};
+
+static const struct sshkey_impl_funcs sshkey_ed25519_slhdsapuresha2192f_funcs = {
+  /* .size = */ ssh_generic_size,
+  /* .alloc = */ ssh_generic_alloc,
+  /* .cleanup = */ ssh_generic_cleanup,
+  /* .equal = */ ssh_generic_equal,
+  /* .ssh_serialize_public = */ ssh_generic_serialize_public,
+  /* .ssh_deserialize_public = */ ssh_generic_deserialize_public,
+  /* .ssh_serialize_private = */ ssh_generic_serialize_private,
+  /* .ssh_deserialize_private = */ ssh_generic_deserialize_private,
+  /* .generate = */ ssh_generic_generate,
+  /* .copy_public = */ ssh_generic_copy_public,
+  /* .sign = */ ssh_generic_sign,
+  /* .verify = */ ssh_generic_verify,
+};
+
+const struct sshkey_impl sshkey_ed25519_slhdsapuresha2192f_impl = {
+  /* .name = */ "ssh-ed25519-slhdsapuresha2192f",
+  /* .shortname = */ "ED25519_SLHDSAPURESHA2192F",
+  /* .sigalg = */ NULL,
+  /* .type = */ KEY_ED25519_SLH_DSA_PURE_SHA2_192F,
+  /* .nid = */ 0,
+  /* .cert = */ 0,
+  /* .sigonly = */ 0,
+  /* .keybits = */ 0,
+  /* .funcs = */ &sshkey_ed25519_slhdsapuresha2192f_funcs,
+};
+
 #ifdef WITH_OPENSSL
 static const struct sshkey_impl_funcs sshkey_rsa3072_falcon512_funcs = {
   /* .size = */ ssh_generic_size,
@@ -1527,6 +1671,32 @@ const struct sshkey_impl sshkey_ecdsanistp256_slhdsapuresha2128f_impl = {
   /* .sigonly = */ 0,
   /* .keybits = */ 0,
   /* .funcs = */ &sshkey_ecdsanistp256_slhdsapuresha2128f_funcs,
+};
+static const struct sshkey_impl_funcs sshkey_ecdsanistp384_slhdsapuresha2192f_funcs = {
+  /* .size = */ ssh_generic_size,
+  /* .alloc = */ ssh_generic_alloc,
+  /* .cleanup = */ ssh_generic_cleanup,
+  /* .equal = */ ssh_generic_equal,
+  /* .ssh_serialize_public = */ ssh_generic_serialize_public,
+  /* .ssh_deserialize_public = */ ssh_generic_deserialize_public,
+  /* .ssh_serialize_private = */ ssh_generic_serialize_private,
+  /* .ssh_deserialize_private = */ ssh_generic_deserialize_private,
+  /* .generate = */ ssh_generic_generate,
+  /* .copy_public = */ ssh_generic_copy_public,
+  /* .sign = */ ssh_generic_sign,
+  /* .verify = */ ssh_generic_verify,
+};
+
+const struct sshkey_impl sshkey_ecdsanistp384_slhdsapuresha2192f_impl = {
+  /* .name = */ "ssh-ecdsa-nistp384-slhdsapuresha2192f",
+  /* .shortname = */ "ECDSA_NISTP384_SLHDSAPURESHA2192F",
+  /* .sigalg = */ NULL,
+  /* .type = */ KEY_ECDSA_NISTP384_SLH_DSA_PURE_SHA2_192F,
+  /* .nid = */ NID_secp384r1,
+  /* .cert = */ 0,
+  /* .sigonly = */ 0,
+  /* .keybits = */ 0,
+  /* .funcs = */ &sshkey_ecdsanistp384_slhdsapuresha2192f_funcs,
 };
 static const struct sshkey_impl_funcs sshkey_ecdsanistp521_slhdsapuresha2256f_funcs = {
   /* .size = */ ssh_generic_size,
@@ -1729,6 +1899,10 @@ const struct sshkey_impl *oqs_classical_sshkey_impl(const struct sshkey *k)
       // the interface. This behavior is in-line with the "normal" ECDSA code.
       impl = &sshkey_ecdsa_nistp256_impl;
       break;
+    case KEY_ED25519_ML_DSA_65:
+    case KEY_ED25519_SLH_DSA_PURE_SHA2_192F:
+      impl = &sshkey_ed25519_impl;
+      break;
   }
   // n.b. The sshkey_impls returned here are declared as const and are expected
   // to be complete (i.e. all interfaces implemented) and immutable.
@@ -1753,6 +1927,10 @@ const struct sshkey_impl *oqs_pq_sshkey_impl(const struct sshkey *k)
     case KEY_RSA3072_SLH_DSA_PURE_SHA2_128F:
     case KEY_ECDSA_NISTP256_SLH_DSA_PURE_SHA2_128F:
       impl = &sshkey_slhdsapuresha2128f_impl;
+      break;
+    case KEY_SLH_DSA_PURE_SHA2_192F:
+    case KEY_ECDSA_NISTP384_SLH_DSA_PURE_SHA2_192F:
+      impl = &sshkey_slhdsapuresha2192f_impl;
       break;
     case KEY_SLH_DSA_PURE_SHA2_256F:
     case KEY_ECDSA_NISTP521_SLH_DSA_PURE_SHA2_256F:
@@ -1783,6 +1961,12 @@ const struct sshkey_impl *oqs_pq_sshkey_impl(const struct sshkey *k)
     case KEY_MAYO_5:
     case KEY_ECDSA_NISTP521_MAYO_5:
       impl = &sshkey_mayo5_impl;
+      break;
+    case KEY_ED25519_ML_DSA_65:
+      impl = &sshkey_mldsa65_impl;
+      break;
+    case KEY_ED25519_SLH_DSA_PURE_SHA2_192F:
+      impl = &sshkey_slhdsapuresha2192f_impl;
       break;
 ///// OQS_TEMPLATE_FRAGMENT_IMPL_LOOKUP_CASES_END
     default:

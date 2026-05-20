@@ -212,6 +212,9 @@ type_bits_valid(int type, const char *name, u_int32_t *bitsp)
 		  case KEY_ECDSA_NISTP521_FALCON_1024:
 		    *bitsp = 521;
 		    break;
+		  case KEY_ECDSA_NISTP384_SLH_DSA_PURE_SHA2_192F:
+		    *bitsp = 384;
+		    break;
 		  case KEY_ECDSA_NISTP521_SLH_DSA_PURE_SHA2_256F:
 		    *bitsp = 521;
 		    break;
@@ -311,6 +314,12 @@ ask_filename(struct passwd *pw, const char *prompt)
 		case KEY_ED25519_SK_CERT:
 			name = _PATH_SSH_CLIENT_ID_ED25519_SK;
 			break;
+		case KEY_ED25519_ML_DSA_65:
+			name = _PATH_SSH_CLIENT_ID_ED25519_ML_DSA_65;
+			break;
+		case KEY_ED25519_SLH_DSA_PURE_SHA2_192F:
+			name = _PATH_SSH_CLIENT_ID_ED25519_SLH_DSA_PURE_SHA2_192F;
+			break;
 ///// OQS_TEMPLATE_FRAGMENT_HANDLE_ID_FILES_START
 		  case KEY_FALCON_512:
 		    name = _PATH_SSH_CLIENT_ID_FALCON_512;
@@ -320,6 +329,9 @@ ask_filename(struct passwd *pw, const char *prompt)
 		    break;
 		  case KEY_SLH_DSA_PURE_SHA2_128F:
 		    name = _PATH_SSH_CLIENT_ID_SLH_DSA_PURE_SHA2_128F;
+		    break;
+		  case KEY_SLH_DSA_PURE_SHA2_192F:
+		    name = _PATH_SSH_CLIENT_ID_SLH_DSA_PURE_SHA2_192F;
 		    break;
 		  case KEY_SLH_DSA_PURE_SHA2_256F:
 		    name = _PATH_SSH_CLIENT_ID_SLH_DSA_PURE_SHA2_256F;
@@ -364,6 +376,9 @@ ask_filename(struct passwd *pw, const char *prompt)
 		    break;
 		  case KEY_ECDSA_NISTP256_SLH_DSA_PURE_SHA2_128F:
 		    name = _PATH_SSH_CLIENT_ID_ECDSA_NISTP256_SLH_DSA_PURE_SHA2_128F;
+		    break;
+		  case KEY_ECDSA_NISTP384_SLH_DSA_PURE_SHA2_192F:
+		    name = _PATH_SSH_CLIENT_ID_ECDSA_NISTP384_SLH_DSA_PURE_SHA2_192F;
 		    break;
 		  case KEY_ECDSA_NISTP521_SLH_DSA_PURE_SHA2_256F:
 		    name = _PATH_SSH_CLIENT_ID_ECDSA_NISTP521_SLH_DSA_PURE_SHA2_256F;
@@ -1135,6 +1150,7 @@ do_gen_all_hostkeys(struct passwd *pw)
 		{ "falcon512", "FALCON_512", _PATH_HOST_FALCON_512_KEY_FILE },
 		{ "falcon1024", "FALCON_1024", _PATH_HOST_FALCON_1024_KEY_FILE },
 		{ "slhdsapuresha2128f", "SLH_DSA_PURE_SHA2_128F", _PATH_HOST_SLH_DSA_PURE_SHA2_128F_KEY_FILE },
+		{ "slhdsapuresha2192f", "SLH_DSA_PURE_SHA2_192F", _PATH_HOST_SLH_DSA_PURE_SHA2_192F_KEY_FILE },
 		{ "slhdsapuresha2256f", "SLH_DSA_PURE_SHA2_256F", _PATH_HOST_SLH_DSA_PURE_SHA2_256F_KEY_FILE },
 		{ "mldsa-44", "ML_DSA_44", _PATH_HOST_ML_DSA_44_KEY_FILE },
 		{ "mldsa-65", "ML_DSA_65", _PATH_HOST_ML_DSA_65_KEY_FILE },
@@ -1151,6 +1167,7 @@ do_gen_all_hostkeys(struct passwd *pw)
 		{ "ecdsa_nistp256_falcon512", "ECDSA_NISTP256_FALCON_512", _PATH_HOST_ECDSA_NISTP256_FALCON_512_KEY_FILE },
 		{ "ecdsa_nistp521_falcon1024", "ECDSA_NISTP521_FALCON_1024", _PATH_HOST_ECDSA_NISTP521_FALCON_1024_KEY_FILE },
 		{ "ecdsa_nistp256_slhdsapuresha2128f", "ECDSA_NISTP256_SLH_DSA_PURE_SHA2_128F", _PATH_HOST_ECDSA_NISTP256_SLH_DSA_PURE_SHA2_128F_KEY_FILE },
+		{ "ecdsa_nistp384_slhdsapuresha2192f", "ECDSA_NISTP384_SLH_DSA_PURE_SHA2_192F", _PATH_HOST_ECDSA_NISTP384_SLH_DSA_PURE_SHA2_192F_KEY_FILE },
 		{ "ecdsa_nistp521_slhdsapuresha2256f", "ECDSA_NISTP521_SLH_DSA_PURE_SHA2_256F", _PATH_HOST_ECDSA_NISTP521_SLH_DSA_PURE_SHA2_256F_KEY_FILE },
 		{ "ecdsa_nistp256_mldsa-44", "ECDSA_NISTP256_ML_DSA_44", _PATH_HOST_ECDSA_NISTP256_ML_DSA_44_KEY_FILE },
 		{ "ecdsa_nistp384_mldsa-65", "ECDSA_NISTP384_ML_DSA_65", _PATH_HOST_ECDSA_NISTP384_ML_DSA_65_KEY_FILE },
@@ -1660,10 +1677,13 @@ do_change_comment(struct passwd *pw, const char *identity_comment)
 	    private->type != KEY_FALCON_512 &&
 	    private->type != KEY_FALCON_1024 &&
 	    private->type != KEY_SLH_DSA_PURE_SHA2_128F &&
+		    private->type != KEY_SLH_DSA_PURE_SHA2_192F &&
 	    private->type != KEY_SLH_DSA_PURE_SHA2_256F &&
 	    private->type != KEY_ML_DSA_44 &&
 	    private->type != KEY_ML_DSA_65 &&
 	    private->type != KEY_ML_DSA_87 &&
+	    private->type != KEY_ED25519_ML_DSA_65 &&
+	    private->type != KEY_ED25519_SLH_DSA_PURE_SHA2_192F &&
 	    private->type != KEY_MAYO_2 &&
 	    private->type != KEY_MAYO_3 &&
 	    private->type != KEY_MAYO_5 &&
@@ -1676,6 +1696,7 @@ do_change_comment(struct passwd *pw, const char *identity_comment)
 	    private->type != KEY_ECDSA_NISTP256_FALCON_512 &&
 	    private->type != KEY_ECDSA_NISTP521_FALCON_1024 &&
 	    private->type != KEY_ECDSA_NISTP256_SLH_DSA_PURE_SHA2_128F &&
+	    private->type != KEY_ECDSA_NISTP384_SLH_DSA_PURE_SHA2_192F &&
 	    private->type != KEY_ECDSA_NISTP521_SLH_DSA_PURE_SHA2_256F &&
 	    private->type != KEY_ECDSA_NISTP256_ML_DSA_44 &&
 	    private->type != KEY_ECDSA_NISTP384_ML_DSA_65 &&
@@ -3929,10 +3950,16 @@ main(int argc, char **argv)
 			    _PATH_HOST_SLH_DSA_PURE_SHA2_128F_KEY_FILE, rr_hostname,
 			    print_generic, opts, nopts);
 			n += do_print_resource_record(pw,
+			    _PATH_HOST_SLH_DSA_PURE_SHA2_192F_KEY_FILE, rr_hostname,
+			    print_generic, opts, nopts);
+			n += do_print_resource_record(pw,
 			    _PATH_HOST_RSA3072_SLH_DSA_PURE_SHA2_128F_KEY_FILE, rr_hostname,
 			    print_generic, opts, nopts);
 			n += do_print_resource_record(pw,
 			    _PATH_HOST_ECDSA_NISTP256_SLH_DSA_PURE_SHA2_128F_KEY_FILE, rr_hostname,
+			    print_generic, opts, nopts);
+			n += do_print_resource_record(pw,
+			    _PATH_HOST_ECDSA_NISTP384_SLH_DSA_PURE_SHA2_192F_KEY_FILE, rr_hostname,
 			    print_generic, opts, nopts);
 			n += do_print_resource_record(pw,
 			    _PATH_HOST_SLH_DSA_PURE_SHA2_256F_KEY_FILE, rr_hostname,

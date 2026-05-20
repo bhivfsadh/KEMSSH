@@ -69,6 +69,8 @@ typedef struct {
 	char   *kex_algorithms;	/* SSH2 kex methods in order of preference. */
 	int	kex_algorithms_set; /* KexAlgorithms was set by the user */
 	char   *ca_sign_algorithms;	/* Allowed CA signature algorithms */
+	int	kem_authentication;	/* Try KEM user authentication. */
+	char   *kem_auth_algorithms;	/* KEM auth algorithms in preference order. */
 	char   *hostname;	/* Real host to connect. */
 	char   *tag;		/* Configuration tag name. */
 	char   *host_key_alias;	/* hostname alias for .ssh/known_hosts */
@@ -91,6 +93,7 @@ typedef struct {
 	char   *identity_files[SSH_MAX_IDENTITY_FILES];
 	int    identity_file_userprovided[SSH_MAX_IDENTITY_FILES];
 	struct sshkey *identity_keys[SSH_MAX_IDENTITY_FILES];
+	char   *identity_kem_file;
 
 	int	num_certificate_files; /* Number of extra certificates for ssh. */
 	char	*certificate_files[SSH_MAX_CERTIFICATE_FILES];
