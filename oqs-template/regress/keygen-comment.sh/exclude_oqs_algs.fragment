@@ -1,0 +1,4 @@
+{%- for sig in config['sigs'] %}
+		*{{ sig.get('pretty_name', sig['name']|replace('_','')) }}*) test -z "$oldfmt" || continue ;;
+{%- endfor %}
+

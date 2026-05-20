@@ -1,0 +1,610 @@
+# kexs cannot be empty due to myproposal.h
+kexs:
+  -
+    family: 'FrodoKEM'
+    name: 'frodokem_640_aes'
+    enable: true
+    hash: 'sha256'
+    pretty_name: 'frodokem-640-aes-sha256'
+    mix_with:
+      -
+        name: 'nistp256'
+        openssl_nid: 'NID_X9_62_prime256v1'
+        pretty_name: 'ecdh-nistp256-frodokem-640-aesr2-sha256@openquantumsafe.org'
+      -
+        name: 'x25519'
+        x25519: true
+        pretty_name: 'x25519-frodokem-640-aesr2-sha256@openquantumsafe.org'
+  -
+    family: 'FrodoKEM'
+    name: 'frodokem_976_aes'
+    enable: true
+    hash: 'sha384'
+    pretty_name: 'frodokem-976-aes-sha384'
+    mix_with:
+      -
+        name: 'nistp384'
+        openssl_nid: 'NID_secp384r1'
+        pretty_name: 'ecdh-nistp384-frodokem-976-aesr2-sha384@openquantumsafe.org'
+  -
+    family: 'FrodoKEM'
+    name: 'frodokem_1344_aes'
+    enable: true
+    hash: 'sha512'
+    pretty_name: 'frodokem-1344-aes-sha512'
+    mix_with:
+      -
+        name: 'nistp521'
+        openssl_nid: 'NID_secp521r1'
+        pretty_name: 'ecdh-nistp521-frodokem-1344-aesr2-sha512@openquantumsafe.org'
+  -
+    family: 'FrodoKEM'
+    name: 'frodokem_640_shake'
+    enable: true
+    hash: 'sha256'
+    pretty_name: 'frodokem-640-shake-sha256'
+    mix_with:
+      -
+        name: 'nistp256'
+        openssl_nid: 'NID_X9_62_prime256v1'
+        pretty_name: 'ecdh-nistp256-frodokem-640-shaker2-sha256@openquantumsafe.org'
+      -
+        name: 'x25519'
+        x25519: true
+        pretty_name: 'x25519-frodokem-640-shaker2-sha256@openquantumsafe.org'
+  -
+    family: 'FrodoKEM'
+    name: 'frodokem_976_shake'
+    enable: true
+    hash: 'sha384'
+    pretty_name: 'frodokem-976-shake-sha384'
+    mix_with:
+      -
+        name: 'nistp384'
+        openssl_nid: 'NID_secp384r1'
+        pretty_name: 'ecdh-nistp384-frodokem-976-shaker2-sha384@openquantumsafe.org'
+  -
+    family: 'FrodoKEM'
+    name: 'frodokem_1344_shake'
+    enable: true
+    hash: 'sha512'
+    pretty_name: 'frodokem-1344-shake-sha512'
+    mix_with:
+      -
+        name: 'nistp521'
+        openssl_nid: 'NID_secp521r1'
+        pretty_name: 'ecdh-nistp521-frodokem-1344-shaker2-sha512@openquantumsafe.org'
+  -
+    family: 'Kyber'
+    name: 'kyber_512'
+    enable: true
+    hash: 'sha256'
+    pretty_name: 'kyber-512-sha256'
+    mix_with:
+      -
+        name: 'nistp256'
+        openssl_nid: 'NID_X9_62_prime256v1'
+        pretty_name: 'ecdh-nistp256-kyber-512r3-sha256-d00@openquantumsafe.org'
+      -
+        name: 'x25519'
+        x25519: true
+        pretty_name: 'x25519-kyber-512r3-sha256-d00@amazon.com'
+  -
+    family: 'Kyber'
+    name: 'kyber_768'
+    enable: true
+    hash: 'sha384'
+    pretty_name: 'kyber-768-sha384'
+    mix_with:
+      -
+        name: 'nistp384'
+        openssl_nid: 'NID_secp384r1'
+        pretty_name: 'ecdh-nistp384-kyber-768r3-sha384-d00@openquantumsafe.org'
+  -
+    family: 'Kyber'
+    name: 'kyber_1024'
+    enable: true
+    hash: 'sha512'
+    pretty_name: 'kyber-1024-sha512'
+    mix_with:
+      -
+        name: 'nistp521'
+        openssl_nid: 'NID_secp521r1'
+        pretty_name: 'ecdh-nistp521-kyber-1024r3-sha512-d00@openquantumsafe.org'
+  -
+    family: 'BIKE'
+    name: 'bike_l1'
+    enable: true
+    hash: 'sha512'
+    pretty_name: 'bike-l1-sha512'
+    mix_with:
+      -
+        name: 'nistp256'
+        openssl_nid: 'NID_X9_62_prime256v1'
+        pretty_name: 'ecdh-nistp256-bike-l1r4-sha512@openquantumsafe.org'
+      -
+        name: 'x25519'
+        x25519: true
+        pretty_name: 'x25519-bike-l1r4-sha512@openquantumsafe.org'
+  -
+    family: 'BIKE'
+    name: 'bike_l3'
+    enable: true
+    hash: 'sha512'
+    pretty_name: 'bike-l3-sha512'
+    mix_with:
+      -
+        name: 'nistp384'
+        openssl_nid: 'NID_secp384r1'
+        pretty_name: 'ecdh-nistp384-bike-l3r4-sha512@openquantumsafe.org'
+  -
+    family: 'BIKE'
+    name: 'bike_l5'
+    enable: true
+    hash: 'sha512'
+    pretty_name: 'bike-l5-sha512'
+    mix_with:
+      -
+        name: 'nistp521'
+        openssl_nid: 'NID_secp521r1'
+        pretty_name: 'ecdh-nistp521-bike-l5r4-sha512@openquantumsafe.org'
+  -
+    family: 'ClassicMcEliece'
+    name: 'classic_mceliece_348864'
+    enable: true
+    hash: 'sha256'
+    pretty_name: 'classic-mceliece-348864-sha256'
+    mix_with:
+      -
+        name: 'nistp256'
+        openssl_nid: 'NID_X9_62_prime256v1'
+        pretty_name: 'ecdh-nistp256-classic-mceliece-348864r4-sha256@openquantumsafe.org'
+      -
+        name: 'x25519'
+        x25519: true
+        pretty_name: 'x25519-classic-mceliece-348864r4-sha256@openquantumsafe.org'
+  -
+    family: 'ClassicMcEliece'
+    name: 'classic_mceliece_348864f'
+    enable: true
+    hash: 'sha256'
+    pretty_name: 'classic-mceliece-348864f-sha256'
+    mix_with:
+      -
+        name: 'nistp256'
+        openssl_nid: 'NID_X9_62_prime256v1'
+        pretty_name: 'ecdh-nistp256-classic-mceliece-348864fr4-sha256@openquantumsafe.org'
+      -
+        name: 'x25519'
+        x25519: true
+        pretty_name: 'x25519-classic-mceliece-348864fr4-sha256@openquantumsafe.org'
+  -
+    family: 'ClassicMcEliece'
+    name: 'classic_mceliece_460896'
+    enable: true
+    hash: 'sha512'
+    pretty_name: 'classic-mceliece-460896-sha512'
+    mix_with:
+      -
+        name: 'nistp384'
+        openssl_nid: 'NID_secp384r1'
+        pretty_name: 'ecdh-nistp384-classic-mceliece-460896r4-sha512@openquantumsafe.org'
+  -
+    family: 'ClassicMcEliece'
+    name: 'classic_mceliece_460896f'
+    enable: true
+    hash: 'sha512'
+    pretty_name: 'classic-mceliece-460896f-sha512'
+    mix_with:
+      -
+        name: 'nistp384'
+        openssl_nid: 'NID_secp384r1'
+        pretty_name: 'ecdh-nistp384-classic-mceliece-460896fr4-sha512@openquantumsafe.org'
+  -
+    family: 'ClassicMcEliece'
+    name: 'classic_mceliece_6688128'
+    enable: true
+    hash: 'sha512'
+    pretty_name: 'classic-mceliece-6688128-sha512'
+    mix_with:
+      -
+        name: 'nistp521'
+        openssl_nid: 'NID_secp521r1'
+        pretty_name: 'ecdh-nistp521-classic-mceliece-6688128r4-sha512@openquantumsafe.org'
+  -
+    family: 'ClassicMcEliece'
+    name: 'classic_mceliece_6688128f'
+    enable: true
+    hash: 'sha512'
+    pretty_name: 'classic-mceliece-6688128f-sha512'
+    mix_with:
+      -
+        name: 'nistp521'
+        openssl_nid: 'NID_secp521r1'
+        pretty_name: 'ecdh-nistp521-classic-mceliece-6688128fr4-sha512@openquantumsafe.org'
+  -
+    family: 'ClassicMcEliece'
+    name: 'classic_mceliece_6960119'
+    enable: true
+    hash: 'sha512'
+    pretty_name: 'classic-mceliece-6960119-sha512'
+    mix_with:
+      -
+        name: 'nistp521'
+        openssl_nid: 'NID_secp521r1'
+        pretty_name: 'ecdh-nistp521-classic-mceliece-6960119r4-sha512@openquantumsafe.org'
+  -
+    family: 'ClassicMcEliece'
+    name: 'classic_mceliece_6960119f'
+    enable: true
+    hash: 'sha512'
+    pretty_name: 'classic-mceliece-6960119f-sha512'
+    mix_with:
+      -
+        name: 'nistp521'
+        openssl_nid: 'NID_secp521r1'
+        pretty_name: 'ecdh-nistp521-classic-mceliece-6960119fr4-sha512@openquantumsafe.org'
+  -
+    family: 'ClassicMcEliece'
+    name: 'classic_mceliece_8192128'
+    enable: true
+    hash: 'sha512'
+    pretty_name: 'classic-mceliece-8192128-sha512'
+    mix_with:
+      -
+        name: 'nistp521'
+        openssl_nid: 'NID_secp521r1'
+        pretty_name: 'ecdh-nistp521-classic-mceliece-8192128r4-sha512@openquantumsafe.org'
+  -
+    family: 'ClassicMcEliece'
+    name: 'classic_mceliece_8192128f'
+    enable: true
+    hash: 'sha512'
+    pretty_name: 'classic-mceliece-8192128f-sha512'
+    mix_with:
+      -
+        name: 'nistp521'
+        openssl_nid: 'NID_secp521r1'
+        pretty_name: 'ecdh-nistp521-classic-mceliece-8192128fr4-sha512@openquantumsafe.org'
+  -
+    family: 'HQC'
+    name: 'hqc_128'
+    enable: false
+    hash: 'sha256'
+    pretty_name: 'hqc-128-sha256'
+    mix_with:
+      -
+        name: 'nistp256'
+        openssl_nid: 'NID_X9_62_prime256v1'
+        pretty_name: 'ecdh-nistp256-hqc-128r3-sha256@openquantumsafe.org'
+      -
+        name: 'x25519'
+        x25519: true
+        pretty_name: 'x25519-hqc-128r3-sha256@openquantumsafe.org'
+  -
+    family: 'HQC'
+    name: 'hqc_192'
+    enable: false
+    hash: 'sha384'
+    pretty_name: 'hqc-192-sha384'
+    mix_with:
+      -
+        name: 'nistp384'
+        openssl_nid: 'NID_secp384r1'
+        pretty_name: 'ecdh-nistp384-hqc-192r3-sha384@openquantumsafe.org'
+  -
+    family: 'HQC'
+    name: 'hqc_256'
+    enable: false
+    hash: 'sha512'
+    pretty_name: 'hqc-256-sha512'
+    mix_with:
+      -
+        name: 'nistp521'
+        openssl_nid: 'NID_secp521r1'
+        pretty_name: 'ecdh-nistp521-hqc-256r3-sha512@openquantumsafe.org'
+  -
+    family: 'ML-KEM'
+    name: 'ml_kem_512'
+    enable: true
+    hash: 'sha256'
+    pretty_name: 'mlkem512-sha256'
+    mix_with:
+      -
+        name: 'nistp256'
+        openssl_nid: 'NID_X9_62_prime256v1'
+        pretty_name: 'ecdh-nistp256-ml-kem-512-sha256@openquantumsafe.org'
+      -
+        name: 'x25519'
+        x25519: true
+        pretty_name: 'x25519-ml-kem-512-sha256@openquantumsafe.org'
+  -
+    family: 'ML-KEM'
+    name: 'ml_kem_768'
+    enable: true
+    hash: 'sha256'
+    pretty_name: 'mlkem768-sha256'
+    mix_with:
+      -
+        name: 'nistp256'
+        openssl_nid: 'NID_X9_62_prime256v1'
+        pretty_name: 'mlkem768nistp256-sha256'
+      -
+        name: 'x25519'
+        x25519: true
+        pretty_name: 'mlkem768x25519-sha256'
+  -
+    family: 'ML-KEM'
+    name: 'ml_kem_1024'
+    enable: true
+    hash: 'sha384'
+    pretty_name: 'mlkem1024-sha384'
+    mix_with:
+      -
+        name: 'nistp384'
+        openssl_nid: 'NID_secp384r1'
+        pretty_name: 'mlkem1024nistp384-sha384'
+  -
+    family: 'NTRU-Prime'
+    name: 'ntruprime_sntrup761'
+    enable: true
+    hash: 'sha512'
+    pretty_name: 'sntrup761-sha512'
+    mix_with:
+      -
+        name: 'x25519'
+        x25519: true
+        pretty_name: 'sntrup761x25519-sha512@openssh.com'
+
+sigs:
+  -
+    family: 'Falcon'
+    name: 'falcon_512'
+    enable: true
+    level: 1
+    mix_with:
+      -
+        name: 'rsa3072'
+        rsa: true
+      -
+        name: 'ecdsa_nistp256'
+        openssl_nid: 'NID_X9_62_prime256v1'
+  -
+    family: 'Falcon'
+    name: 'falcon_1024'
+    enable: true
+    level: 5
+    mix_with:
+      -
+        name: 'ecdsa_nistp521'
+        openssl_nid: 'NID_secp521r1'
+  -
+    family: 'Falcon'
+    name: 'falcon_padded_512'
+    level: 1
+    mix_with:
+      -
+        name: 'rsa3072'
+        rsa: true
+      -
+        name: 'ecdsa_nistp256'
+        openssl_nid: 'NID_X9_62_prime256v1'
+  -
+    family: 'Falcon'
+    name: 'falcon_padded_1024'
+    level: 5
+    mix_with:
+      -
+        name: 'ecdsa_nistp521'
+        openssl_nid: 'NID_secp521r1'
+  -
+    family: 'Dilithium'
+    name: 'dilithium_2'
+    level: 1
+    mix_with:
+      -
+        name: 'rsa3072'
+        rsa: true
+      -
+        name: 'ecdsa_nistp256'
+        openssl_nid: 'NID_X9_62_prime256v1'
+  -
+    family: 'Dilithium'
+    name: 'dilithium_3'
+    level: 3
+    mix_with:
+      -
+        name: 'ecdsa_nistp384'
+        openssl_nid: 'NID_secp384r1'
+  -
+    family: 'Dilithium'
+    name: 'dilithium_5'
+    level: 5
+    mix_with:
+      -
+        name: 'ecdsa_nistp521'
+        openssl_nid: 'NID_secp521r1'
+  -
+    family: 'SLH-DSA'
+    name: 'slh_dsa_pure_sha2_128f'
+    enable: true
+    level: 1
+    mix_with:
+      -
+        name: 'rsa3072'
+        rsa: true
+      -
+        name: 'ecdsa_nistp256'
+        openssl_nid: 'NID_X9_62_prime256v1'
+  -
+    family: 'SLH-DSA'
+    name: 'slh_dsa_sha2_128s_simple'
+    level: 1
+    mix_with:
+      -
+        name: 'rsa3072'
+        rsa: true
+      -
+        name: 'ecdsa_nistp256'
+        openssl_nid: 'NID_X9_62_prime256v1'
+  -
+    family: 'SLH-DSA'
+    name: 'slh_dsa_shake_128f_simple'
+    level: 1
+    mix_with:
+      -
+        name: 'rsa3072'
+        rsa: true
+      -
+        name: 'ecdsa_nistp256'
+        openssl_nid: 'NID_X9_62_prime256v1'
+  -
+    family: 'SLH-DSA'
+    name: 'slh_dsa_shake_128s_simple'
+    level: 1
+    mix_with:
+      -
+        name: 'rsa3072'
+        rsa: true
+      -
+        name: 'ecdsa_nistp256'
+        openssl_nid: 'NID_X9_62_prime256v1'
+  -
+    family: 'SLH-DSA'
+    name: 'slh_dsa_sha2_192f_simple'
+    level: 3
+    mix_with:
+      -
+        name: 'ecdsa_nistp384'
+        openssl_nid: 'NID_secp384r1'
+  -
+    family: 'SLH-DSA'
+    name: 'slh_dsa_sha2_192s_simple'
+    level: 3
+    mix_with:
+      -
+        name: 'ecdsa_nistp384'
+        openssl_nid: 'NID_secp384r1'
+  -
+    family: 'SLH-DSA'
+    name: 'slh_dsa_shake_192f_simple'
+    level: 3
+    mix_with:
+      -
+        name: 'ecdsa_nistp384'
+        openssl_nid: 'NID_secp384r1'
+  -
+    family: 'SLH-DSA'
+    name: 'slh_dsa_shake_192s_simple'
+    level: 3
+    mix_with:
+      -
+        name: 'ecdsa_nistp384'
+        openssl_nid: 'NID_secp384r1'
+  -
+    family: 'SLH-DSA'
+    name: 'slh_dsa_pure_sha2_256f'
+    enable: true
+    level: 5
+    mix_with:
+      -
+        name: 'ecdsa_nistp521'
+        openssl_nid: 'NID_secp521r1'
+  -
+    family: 'SLH-DSA'
+    name: 'slh_dsa_sha2_256s_simple'
+    level: 5
+    mix_with:
+      -
+        name: 'ecdsa_nistp521'
+        openssl_nid: 'NID_secp521r1'
+  -
+    family: 'SLH-DSA'
+    name: 'slh_dsa_shake_256f_simple'
+    level: 5
+    mix_with:
+      -
+        name: 'ecdsa_nistp521'
+        openssl_nid: 'NID_secp521r1'
+  -
+    family: 'SLH-DSA'
+    name: 'slh_dsa_shake_256s_simple'
+    level: 5
+    mix_with:
+      -
+        name: 'ecdsa_nistp521'
+        openssl_nid: 'NID_secp521r1'
+  -
+    family: 'ML-DSA'
+    name: 'ml_dsa_44'
+    pretty_name: 'mldsa-44'
+    enable: true
+    level: 1
+    mix_with:
+      -
+        name: 'rsa3072'
+        rsa: true
+      -
+        name: 'ecdsa_nistp256'
+        openssl_nid: 'NID_X9_62_prime256v1'
+  -
+    family: 'ML-DSA'
+    name: 'ml_dsa_65'
+    pretty_name: 'mldsa-65'
+    enable: true
+    level: 3
+    mix_with:
+      -
+        name: 'ecdsa_nistp384'
+        openssl_nid: 'NID_secp384r1'
+  -
+    family: 'ML-DSA'
+    name: 'ml_dsa_87'
+    pretty_name: 'mldsa-87'
+    enable: true
+    level: 5
+    mix_with:
+      -
+        name: 'ecdsa_nistp521'
+        openssl_nid: 'NID_secp521r1'
+  -
+    family: 'MAYO'
+    name: 'mayo_1'
+    level: 1
+    mix_with:
+      -
+        name: 'rsa3072'
+        rsa: true
+      -
+        name: 'ecdsa_nistp256'
+        openssl_nid: 'NID_X9_62_prime256v1'
+  -
+    family: 'MAYO'
+    name: 'mayo_2'
+    enable: true
+    level: 1
+    mix_with:
+      -
+        name: 'rsa3072'
+        rsa: true
+      -
+        name: 'ecdsa_nistp256'
+        openssl_nid: 'NID_X9_62_prime256v1'
+  -
+    family: 'MAYO'
+    name: 'mayo_3'
+    enable: true
+    level: 3
+    mix_with:
+      -
+        name: 'ecdsa_nistp384'
+        openssl_nid: 'NID_secp384r1'
+  -
+    family: 'MAYO'
+    name: 'mayo_5'
+    enable: true
+    level: 5
+    mix_with:
+      -
+        name: 'ecdsa_nistp521'
+        openssl_nid: 'NID_secp521r1'

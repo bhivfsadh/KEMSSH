@@ -1,0 +1,46 @@
+{% for kex in config['kexs'] %}
+    {%- for curve in kex['mix_with'] if curve['x25519'] %}
+/*---------------------------------------------------------------
+ * {{ kex['name']|upper }}_{{ curve['name']|upper }} METHODS
+ *---------------------------------------------------------------
+ */
+int kex_kem_{{ kex['name'] }}_{{ curve['name'] }}_keypair(struct kex *kex)
+{
+    OQS_KEM *kem = OQS_KEM_new(OQS_KEM_alg_{{ kex['name'] }});
+    if (kem == NULL) {
+        return SSH_ERR_ALLOC_FAIL;
+    }
+    int r = kex_kem_generic_with_x25519_keypair(kem, kex);
+    OQS_KEM_free(kem);
+    return r;
+}
+
+int kex_kem_{{ kex['name'] }}_{{ curve['name'] }}_enc(struct kex *kex,
+                                   const struct sshbuf *client_blob,
+                                   struct sshbuf **server_blobp,
+                                   struct sshbuf **shared_secretp)
+{
+    OQS_KEM *kem = OQS_KEM_new(OQS_KEM_alg_{{ kex['name'] }});
+    if (kem == NULL) {
+        return SSH_ERR_ALLOC_FAIL;
+    }
+    int r = kex_kem_generic_with_x25519_enc(kem, kex, client_blob, server_blobp, shared_secretp);
+    OQS_KEM_free(kem);
+    return r;
+}
+
+int kex_kem_{{ kex['name'] }}_{{ curve['name'] }}_dec(struct kex *kex,
+                                       const struct sshbuf *server_blobp,
+                                       struct sshbuf **shared_secretp)
+{
+    OQS_KEM *kem = OQS_KEM_new(OQS_KEM_alg_{{ kex['name'] }});
+    if (kem == NULL) {
+        return SSH_ERR_ALLOC_FAIL;
+    }
+    int r = kex_kem_generic_with_x25519_dec(kem, kex, server_blobp, shared_secretp);
+    OQS_KEM_free(kem);
+    return r;
+}
+    {%- endfor %}
+{%- endfor %}
+
