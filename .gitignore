@@ -4,6 +4,8 @@ config.h
 config.h.in~
 config.log
 config.status
+config.cache
+configure~
 openbsd-compat/Makefile
 openbsd-compat/regress/Makefile
 openbsd-compat/include
@@ -44,3 +46,25 @@ oqs-scripts/tmp
 oqs/
 *.dSYM
 __pycache__
+
+# Local experiment artifacts
+plan/
+test/
+testScripts/.work*/
+testScripts/**/results/
+
+# Key/cert artifacts
+id_*
+ssh_host_*
+*.pem
+*.p12
+*.pfx
+*.prv
+*.pub
+*.cert
+authorized_keys
+known_hosts
+
+# Key fixtures without extensions
+regress/unittests/sshkey/testdata/
+regress/unittests/sshsig/testdata/
