@@ -8,6 +8,7 @@ struct ssh_kem_identity;
 
 #define SSH_KEM_AUTH_METHOD "publickey-kem"
 #define SSH_KEM_AND_AUTH_METHOD "publickey-kem-and"
+#define SSH_KEM_CLIENT_AUTH_LABEL "ssh-publickey-kem-client-auth"
 #define SSH_KEM_DEFAULT_ALG "mlkem768"
 #define SSH_KEM_ALG_MLKEM512 "mlkem512"
 #define SSH_KEM_ALG_MLKEM1024 "mlkem1024"

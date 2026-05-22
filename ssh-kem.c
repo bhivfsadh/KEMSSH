@@ -483,9 +483,11 @@ ssh_kem_derive_response(struct ssh *ssh, const char *user,
 		goto out;
 	}
 	if ((r = ssh_hmac_init(hmac, shared_secret, shared_secret_len)) != 0 ||
-	    (r = ssh_hmac_update_buffer(hmac, context)) != 0 ||
+	    (r = ssh_hmac_update(hmac, SSH_KEM_CLIENT_AUTH_LABEL,
+	    sizeof(SSH_KEM_CLIENT_AUTH_LABEL) - 1)) != 0 ||
 	    (r = ssh_hmac_update(hmac, sshbuf_ptr(ssh->kex->session_id),
 	    sshbuf_len(ssh->kex->session_id))) != 0 ||
+	    (r = ssh_hmac_update_buffer(hmac, context)) != 0 ||
 	    (r = ssh_hmac_final(hmac, response,
 	    digest_len)) != 0)
 		goto out;

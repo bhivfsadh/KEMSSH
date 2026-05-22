@@ -746,8 +746,10 @@ kem_derive_response_monitor(const char *user, const char *service,
 		goto out;
 	}
 	if ((r = ssh_hmac_init(hmac, shared_secret, shared_secret_len)) != 0 ||
-	    (r = ssh_hmac_update_buffer(hmac, context)) != 0 ||
+	    (r = ssh_hmac_update(hmac, SSH_KEM_CLIENT_AUTH_LABEL,
+	    sizeof(SSH_KEM_CLIENT_AUTH_LABEL) - 1)) != 0 ||
 	    (r = ssh_hmac_update(hmac, session_id2, session_id2_len)) != 0 ||
+	    (r = ssh_hmac_update_buffer(hmac, context)) != 0 ||
 	    (r = ssh_hmac_final(hmac, response,
 	    ssh_hmac_bytes(digest_alg))) != 0)
 		goto out;
