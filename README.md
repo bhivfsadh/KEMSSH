@@ -1,4 +1,4 @@
-# KEM-Based-User-Authentication-for-Post-Quantum-SSH (Anonymous Research Artifact)
+# KEMUAuth: KEM-Based-User-Authentication-for-Post-Quantum-SSH (Anonymous Research Artifact)
 
 This repository is an research artifact for evaluating KEM-based user authentication in SSH based on OQS-openSSHv10.
 
